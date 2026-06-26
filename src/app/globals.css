@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+/* Tailwind CSS v4 클래스 기반 다크모드 활성화 variant 선언 */
+@variant dark (&:where(.dark, .dark *));
+
+/* 
+ * Life OS Dashboard - Global Styling & High Contrast Minimalist Themes
+ * 
+ * [설명]
+ * 본 파일은 Tailwind CSS v4를 기반으로 작동하며, Light, Dark 2가지 테마를 지원합니다.
+ * 베테랑 디자이너 관점에서 다크 모드의 글자 픽셀 뭉개짐을 차단하고 
+ * 텍스트 명도비(Contrast)를 WCAG AA 규격(최소 4.5:1 이상)을 충족하도록 상향 조율했습니다.
+ */
+
+@theme {
+  --color-bg-base: var(--bg-base);
+  --color-text-base: var(--text-base);
+  --color-card-bg: var(--card-bg);
+  --color-card-border: var(--card-border);
+  
+  /* 무중력 플로팅 애니메이션: 미세한 고도 변화로 정적이지만 가벼운 느낌 연출 */
+  --animate-float-slow: float-slow 10s ease-in-out infinite;
+  --animate-float-medium: float-medium 8s ease-in-out infinite;
+  --animate-float-fast: float-fast 6s ease-in-out infinite;
+  
+  /* 페이지 및 컴포넌트 등장 애니메이션 */
+  --animate-fade-in-up: fade-in-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  
+  @keyframes float-slow {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+  @keyframes float-medium {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+  @keyframes float-fast {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* ==========================================
+   1. 테마별 CSS 변수 정의 (다크 모드 가독성 정밀 튜닝)
+   ========================================== */
+
+/* 기본 테마: Light */
+:root {
+  --bg-base: #f8fafc; /* 깨끗하고 밝은 슬레이트 화이트 */
+  --text-base: #0f172a; /* Slate 900 */
+  --card-bg: rgba(255, 255, 255, 0.85);
+  --card-border: rgba(226, 232, 240, 0.7); /* Slate 200 */
+}
+
+/* Dark 테마: 가독성 확보를 위해 완전 칠흑 스페이스 블랙보다 심도 깊은 다크 블루-차콜 매칭 */
+:root.dark {
+  --bg-base: #08090d; /* 정돈된 딥 매트 스페이스 블랙 */
+  --text-base: #f8fafc; /* Slate 50 (순백색에 근접하여 최적의 명도비 구현) */
+  --card-bg: rgba(16, 18, 27, 0.85); /* 대비를 확보하기 위한 불투명도 증가 */
+  --card-border: rgba(255, 255, 255, 0.08); /* 얇고 맑은 화이트 경계 라인 */
+}
+
+
+
+/* ==========================================
+   2. 기본 레이아웃 및 텍스트 렌더링 최적화
+   ========================================== */
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-base);
+  /* 텍스트 렌더링 시 서브픽셀 번짐 차단 및 안티앨리어싱 명시 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  
+  /* 테마 전환 시 텍스트 뭉개짐(블러링)을 차단하기 위해 트랜지션 속도를 0.3s로 타이트하게 조율 */
+  transition: background-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
+              color 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 100vh;
+  overflow-x: hidden;
+  letter-spacing: -0.02em;
+}
+
+/* 글래스모피즘(Glassmorphism) 카드 공통 스타일 */
+.glass-panel {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 0.75rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Light 테마용 은은한 섀도우 */
+.glass-panel {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.01),
+              0 10px 40px rgba(15, 23, 42, 0.02);
+}
+
+/* Dark 테마 전용 깊고 명확한 그림자 (카드와 배경 간 확실한 고도감 분리) */
+.dark .glass-panel {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6),
+              0 1px 2px rgba(255, 255, 255, 0.04) inset;
+}
+
+.glass-panel:hover {
+  border-color: rgba(15, 23, 42, 0.15);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 35px rgba(15, 23, 42, 0.06);
+}
+
+.dark .glass-panel:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.8),
+              0 1px 2px rgba(255, 255, 255, 0.06) inset;
+}
+
+/* 커스텀 스크롤바 디자인 */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.3);
+}
