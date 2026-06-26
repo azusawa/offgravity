@@ -14,10 +14,10 @@ export const en = {
     orbitType: "Slow Orbit",
     focusMode: "Focus Mode",
     focusOrbit: "Medium Orbit",
-    todayPromise: "Today's Promise",
-    promiseOrbit: "Fast Orbit",
-    promisePlaceholder: "Enter your core goal for today...",
-    promiseLimit: "chars (autosaved)",
+    todoTitle: "Today's Tasks",
+    todoEmpty: "Register sub-tasks in Goals to start focusing today.",
+    goToGoals: "Go to Goals",
+    todoOrbit: "Fast Orbit",
     stretchAlert: "Focus time is over! Rest and stretch lightly.",
     timeBlockDesc: "Divide your day into 1-hour or 30-minute blocks to design your immersive routine.",
     quote: "Defying gravity is not a physical movement, but elevating one's inner self above chaotic stimulations to align the mind.",
@@ -79,7 +79,10 @@ export const en = {
     titleAdd: "Add Goal",
     buttonAdd: "Add",
     deleteGoal: "Delete Goal",
-    toggleComplete: "Toggle Complete"
+    toggleComplete: "Toggle Complete",
+    todoPlaceholder: "Add task...",
+    todoAutoProgress: "Progress based on tasks",
+    todoEmpty: "No tasks registered."
   },
   scheduler: {
     title: "Timebox Scheduler",

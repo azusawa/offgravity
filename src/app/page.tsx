@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTargetGoals } from '@/hooks/useTargetGoals';
 import TargetGoalsView from '@/components/target/TargetGoalsView';
 import SchedulerView from '@/components/schedule/SchedulerView';
 import CalendarView from '@/components/calendar/CalendarView';
@@ -12,7 +13,9 @@ import {
   Play, 
   Pause, 
   RotateCcw, 
-  FileText
+  ListTodo,
+  ArrowRight,
+  Check
 } from 'lucide-react';
 
 /**
@@ -26,6 +29,7 @@ import {
  */
 export default function HomePage() {
   const { t } = useTranslation();
+  const { goals, toggleTodoInGoal } = useTargetGoals();
   
   // --- [상태 정의] ---
   // 1. 활성 탭 상태 ('dashboard': 마인드셋 보드, 'targets': 목표 설정, 'scheduler': 스케줄러, 'calendar': 달력)
@@ -34,17 +38,21 @@ export default function HomePage() {
   // 2. 실시간 시계 상태
   const [time, setTime] = useState<string>('');
   
-  // 3. 오늘의 핵심 목표 상태 (LocalStorage 연동 - Lazy Initializer 적용)
-  const [goal, setGoal] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('today-core-goal') || '';
-    }
-    return '';
-  });
-  
-  // 4. 포커스 타이머 상태
+  // 3. 포커스 타이머 상태
   const [timeLeft, setTimeLeft] = useState<number>(25 * 60); // 25분 기본값
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+
+  // 미완료 상태인 할 일들만 추출하여 목표 정보 결합
+  const activeTodos = goals.flatMap((g) =>
+    g.todos
+      .filter((t) => !t.isCompleted)
+      .map((todo) => ({
+        ...todo,
+        goalId: g.id,
+        goalTitle: g.title,
+        goalCategory: g.category,
+      }))
+  );
 
   // --- [이펙트 처리] ---
   
@@ -81,12 +89,7 @@ export default function HomePage() {
 
   // --- [이벤트 핸들러] ---
   
-  // 오늘의 목표 저장 핸들러
-  const handleGoalChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setGoal(val);
-    localStorage.setItem('today-core-goal', val);
-  };
+
 
   // 타이머 제어 핸들러
   const toggleTimer = () => setIsTimerRunning(!isTimerRunning);
@@ -192,29 +195,59 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* 카드 3: 오늘의 핵심 목표 메모장 (움직임 속도: Fast) */}
+            {/* 카드 3: 오늘의 ToDo 리스트 (움직임 속도: Fast) */}
             <div className="group glass-panel p-6 flex flex-col justify-between min-h-[240px] lg:col-span-1 md:col-span-2 animate-float-fast">
               <div className="flex justify-between items-center mb-4">
                 <span className="text-[15px] font-semibold tracking-tight text-zinc-500 dark:text-white flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-amber-500/65 dark:text-amber-300 transition-transform duration-500 group-hover:-translate-y-0.5 group-hover:scale-110" />
-                  <span>{t('dashboard.todayPromise')}</span>
+                  <ListTodo className="w-4 h-4 text-amber-500/65 dark:text-amber-300 transition-transform duration-500 group-hover:-translate-y-0.5 group-hover:scale-110" />
+                  <span>{t('dashboard.todoTitle')}</span>
                 </span>
-                <span className="text-xs text-zinc-400/70 dark:text-zinc-100 font-mono">{t('dashboard.promiseOrbit')}</span>
+                <span className="text-xs text-zinc-400/70 dark:text-zinc-100 font-mono">{t('dashboard.todoOrbit')}</span>
               </div>
               
-              <div className="flex-1 flex flex-col justify-center my-2">
-                <textarea
-                  value={goal}
-                  onChange={handleGoalChange}
-                  placeholder={t('dashboard.promisePlaceholder')}
-                  className="w-full bg-transparent border-0 text-sm text-zinc-650 dark:text-zinc-200 placeholder-zinc-400 focus:ring-0 resize-none outline-none min-h-[90px] leading-relaxed focus:border-amber-400/30 dark:focus:border-amber-400/30"
-                  maxLength={150}
-                />
+              <div className="flex-1 flex flex-col justify-center my-1.5 font-sans">
+                {activeTodos.length === 0 ? (
+                  <div className="text-center py-4 space-y-3">
+                    <p className="text-[11px] md:text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed max-w-[200px] mx-auto">
+                      {t('dashboard.todoEmpty')}
+                    </p>
+                    <button
+                      onClick={() => setActiveTab('targets')}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-650 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors cursor-pointer border border-zinc-200 dark:border-zinc-800 rounded px-2.5 py-1"
+                    >
+                      <span>{t('dashboard.goToGoals')}</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
+                    {activeTodos.map((todo) => (
+                      <div
+                        key={todo.id}
+                        className="flex items-center justify-between group/todoItem text-[13px] text-zinc-650 dark:text-zinc-200"
+                      >
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleTodoInGoal(todo.goalId, todo.id)}
+                            className="p-0.5 rounded-full border border-zinc-300 dark:border-zinc-700 text-transparent hover:border-zinc-400 dark:hover:border-zinc-500 active:scale-90 cursor-pointer flex items-center justify-center"
+                          >
+                            <Check className="w-3 h-3" />
+                          </button>
+                          <span>{todo.title}</span>
+                        </div>
+                        <span className="text-[9px] font-medium px-2 py-0.5 rounded-full bg-zinc-500/5 border border-zinc-500/10 text-zinc-400/85">
+                          {todo.goalTitle}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="mt-2 text-right">
-                <span className="text-xs text-zinc-400/80 font-mono">
-                  {goal.length} / 150{t('dashboard.promiseLimit')}
+                <span className="text-[10px] text-zinc-400/80 font-mono">
+                  {activeTodos.length} {t('calendar.event')}
                 </span>
               </div>
             </div>

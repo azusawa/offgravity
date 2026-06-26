@@ -14,10 +14,10 @@ export const ja = {
     orbitType: "Slow Orbit",
     focusMode: "集中モード",
     focusOrbit: "Medium Orbit",
-    todayPromise: "今日の約束",
-    promiseOrbit: "Fast Orbit",
-    promisePlaceholder: "今日達成するコア目標を入力してください...",
-    promiseLimit: "文字 (自動保存)",
+    todoTitle: "今日のタスク",
+    todoEmpty: "目標設定で詳細タスクを登録して、今日一日の没頭を始めましょう。",
+    goToGoals: "目標設定へ移動",
+    todoOrbit: "Fast Orbit",
     stretchAlert: "集中時間が終了しました！軽くストレッチをして休んでください。",
     timeBlockDesc: "1日を1時間または30分単位の時間ブロックに分割し、没頭するルーティンを設計します。",
     quote: "重力に抗うことは物理的な移動ではなく、混乱した刺激から内面を浮かび上がらせる意識の整頓である。",
@@ -79,7 +79,10 @@ export const ja = {
     titleAdd: "目標追加",
     buttonAdd: "追加",
     deleteGoal: "目標削除",
-    toggleComplete: "完了切り替え"
+    toggleComplete: "完了切り替え",
+    todoPlaceholder: "タスクを追加...",
+    todoAutoProgress: "タスク達成率が反映されます",
+    todoEmpty: "登録されたタスクはありません。"
   },
   scheduler: {
     title: "タイムブロックスケジューラ",

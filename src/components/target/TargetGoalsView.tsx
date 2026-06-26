@@ -29,7 +29,10 @@ export default function TargetGoalsView() {
     addGoal, 
     updateGoalProgress, 
     toggleGoalCompletion, 
-    deleteGoal 
+    deleteGoal,
+    addTodoToGoal,
+    toggleTodoInGoal,
+    deleteTodoInGoal
   } = useTargetGoals();
 
   // --- [로컬 UI 상태] ---
@@ -37,6 +40,18 @@ export default function TargetGoalsView() {
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<GoalCategory>('work');
   const [errorMsg, setErrorMsg] = useState('');
+  const [todoInputs, setTodoInputs] = useState<Record<string, string>>({}); // 각 목표 ID별 할 일 입력창 상태
+
+  // 인라인 할 일 추가 핸들러
+  const handleAddTodo = async (goalId: string, title: string) => {
+    if (!title.trim()) return;
+    try {
+      await addTodoToGoal(goalId, title);
+      setTodoInputs((prev) => ({ ...prev, [goalId]: '' }));
+    } catch (err) {
+      console.error('할 일 추가 오류:', err);
+    }
+  };
 
   if (!mounted || loading) {
     return (
@@ -252,24 +267,99 @@ export default function TargetGoalsView() {
                   </span>
                 </div>
 
-                {/* 하단: 진척도 조절 슬라이더 */}
+                {/* 할 일(ToDo) 목록 영역 */}
+                <div className="mt-3 border-t border-zinc-500/5 pt-3 space-y-2">
+                  {goal.todos && goal.todos.length > 0 && (
+                    <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+                      {goal.todos.map((todo) => (
+                        <div key={todo.id} className="flex items-center justify-between group/todo text-[13px] text-zinc-500 dark:text-zinc-400">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleTodoInGoal(goal.id, todo.id)}
+                              className={`p-0.5 rounded-full border transition-all duration-150 active:scale-90 cursor-pointer flex items-center justify-center ${
+                                todo.isCompleted
+                                  ? 'bg-zinc-800 dark:bg-zinc-200 border-transparent text-white dark:text-zinc-950'
+                                  : 'border-zinc-300 dark:border-zinc-700 text-transparent hover:border-zinc-400 dark:hover:border-zinc-500'
+                              }`}
+                            >
+                              <Check className="w-3 h-3 animate-fade-in-up" />
+                            </button>
+                            <span className={`transition-all ${todo.isCompleted ? 'line-through text-zinc-400 dark:text-zinc-650' : 'text-zinc-650 dark:text-zinc-200'}`}>
+                              {todo.title}
+                            </span>
+                          </div>
+                          
+                          <button
+                            type="button"
+                            onClick={() => deleteTodoInGoal(goal.id, todo.id)}
+                            className="opacity-0 group-hover/todo:opacity-100 p-0.5 text-zinc-400 hover:text-red-500 transition-opacity duration-150 cursor-pointer"
+                            aria-label="할 일 삭제"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 인라인 할 일 빠른 입력창 */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleAddTodo(goal.id, todoInputs[goal.id] || '');
+                    }}
+                    className="flex gap-2 items-center"
+                  >
+                    <input
+                      type="text"
+                      value={todoInputs[goal.id] || ''}
+                      onChange={(e) => setTodoInputs((prev) => ({ ...prev, [goal.id]: e.target.value }))}
+                      placeholder={t('target.todoPlaceholder')}
+                      className="flex-1 bg-zinc-500/5 dark:bg-zinc-500/5 border-b border-transparent dark:border-transparent focus:border-zinc-300 dark:focus:border-zinc-700 rounded px-2 py-1 text-[13px] text-zinc-800 dark:text-zinc-200 outline-none placeholder-zinc-400/80"
+                    />
+                  </form>
+                </div>
+
+                {/* 하단: 진척도 조절 슬라이더 또는 게이지 바 */}
                 <div className="space-y-2 border-t border-zinc-500/10 pt-3">
                   <div className="flex justify-between items-center text-xs text-zinc-400 dark:text-zinc-300 font-mono">
                     <span className="flex items-center gap-1">
                       <TrendingUp className="w-3 h-3 transition-transform duration-500 group-hover:translate-x-0.5" />
                       <span>{t('target.progress')}</span>
                     </span>
-                    <span>{goal.progress}%</span>
+                    <span className="flex items-center gap-1.5">
+                      {goal.todos && goal.todos.length > 0 && (
+                        <span className="text-[10px] text-zinc-400/80 dark:text-zinc-500 font-sans">
+                          {t('target.todoAutoProgress')}
+                        </span>
+                      )}
+                      <span>{goal.progress}%</span>
+                    </span>
                   </div>
                   
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={goal.progress}
-                    onChange={(e) => updateGoalProgress(goal.id, parseInt(e.target.value, 10))}
-                    className={`w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer transition-all duration-300 ${getSliderAccentClass(goal.category)}`}
-                  />
+                  {goal.todos && goal.todos.length > 0 ? (
+                    <div className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-300 ${
+                          goal.category === 'work' ? 'bg-blue-500 dark:bg-blue-400' :
+                          goal.category === 'life' ? 'bg-emerald-500 dark:bg-emerald-400' :
+                          goal.category === 'health' ? 'bg-rose-500 dark:bg-rose-400' :
+                          'bg-purple-500 dark:bg-purple-400'
+                        }`}
+                        style={{ width: `${goal.progress}%` }}
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={goal.progress}
+                      onChange={(e) => updateGoalProgress(goal.id, parseInt(e.target.value, 10))}
+                      className={`w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer transition-all duration-300 ${getSliderAccentClass(goal.category)}`}
+                    />
+                  )}
                 </div>
               </div>
             );

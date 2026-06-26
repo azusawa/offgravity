@@ -14,10 +14,10 @@ export const ko = {
     orbitType: "Slow Orbit",
     focusMode: "집중 모드",
     focusOrbit: "Medium Orbit",
-    todayPromise: "오늘의 약속",
-    promiseOrbit: "Fast Orbit",
-    promisePlaceholder: "오늘 이뤄낼 핵심 목표를 입력하세요...",
-    promiseLimit: "자 (자동 저장)",
+    todoTitle: "오늘의 할 일",
+    todoEmpty: "목표 설정에서 세부 할 일을 등록하여 오늘 하루 몰입을 시작하세요.",
+    goToGoals: "목표 설정으로 이동",
+    todoOrbit: "Fast Orbit",
     stretchAlert: "집중 시간이 끝났습니다! 가볍게 스트레칭하며 휴식을 취하세요.",
     timeBlockDesc: "하루를 1시간 또는 30분 단위의 시간 블록으로 쪼개어 몰입을 설계합니다.",
     quote: "중력을 거스르는 것은 물리적인 이동이 아니라, 혼란스러운 자극에서 내면을 띄워 올리는 의식의 정돈이다.",
@@ -79,7 +79,10 @@ export const ko = {
     titleAdd: "목표 추가",
     buttonAdd: "추가",
     deleteGoal: "목표 삭제",
-    toggleComplete: "완료 토글"
+    toggleComplete: "완료 토글",
+    todoPlaceholder: "할 일 추가...",
+    todoAutoProgress: "할 일 완료율 자동 계산",
+    todoEmpty: "등록된 할 일이 없습니다."
   },
   scheduler: {
     title: "타임블록 스케줄러",

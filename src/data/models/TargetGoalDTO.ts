@@ -1,4 +1,4 @@
-import { TargetGoal, GoalPeriod, GoalCategory } from '@/domain/entities/TargetGoal';
+import { TargetGoal, GoalPeriod, GoalCategory, GoalTodo } from '@/domain/entities/TargetGoal';
 
 /**
  * Life OS Dashboard - TargetGoal 데이터 전송 객체 (DTO) 및 매퍼
@@ -18,6 +18,7 @@ export interface TargetGoalDTO {
   progress: number;
   isCompleted: boolean;
   createdAt: string;
+  todos?: GoalTodo[]; // 하위 할 일 목록 DTO 규격에 추가
 }
 
 export class TargetGoalMapper {
@@ -33,6 +34,7 @@ export class TargetGoalMapper {
       progress: dto.progress,
       isCompleted: dto.isCompleted,
       createdAt: dto.createdAt,
+      todos: dto.todos ?? [], // 이전 데이터에 todos가 없을 경우 빈 배열로 방어
     });
   }
 
@@ -48,6 +50,7 @@ export class TargetGoalMapper {
       progress: domain.progress,
       isCompleted: domain.isCompleted,
       createdAt: domain.createdAt,
+      todos: domain.todos,
     };
   }
 }

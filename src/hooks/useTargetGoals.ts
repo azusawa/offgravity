@@ -109,6 +109,60 @@ export function useTargetGoals() {
     }
   };
 
+  // 7. 특정 목표에 할 일 추가 함수
+  const addTodoToGoal = async (goalId: string, title: string) => {
+    try {
+      const found = goals.find((g) => g.id === goalId);
+      if (!found) return;
+
+      const randomId = typeof window !== 'undefined' && window.crypto?.randomUUID 
+        ? window.crypto.randomUUID() 
+        : Math.random().toString(36).substring(2, 11);
+
+      found.addTodo({
+        id: randomId,
+        title,
+        isCompleted: false,
+        createdAt: new Date().toISOString(),
+      });
+
+      await repository.save(found);
+      await fetchGoals(); // 상태 갱신
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  // 8. 특정 목표의 할 일 완료 토글 함수
+  const toggleTodoInGoal = async (goalId: string, todoId: string) => {
+    try {
+      const found = goals.find((g) => g.id === goalId);
+      if (!found) return;
+
+      found.toggleTodo(todoId);
+
+      await repository.save(found);
+      await fetchGoals(); // 상태 갱신
+    } catch (error) {
+      console.error('할 일 완료 토글 중 오류 발생:', error);
+    }
+  };
+
+  // 9. 특정 목표의 할 일 삭제 함수
+  const deleteTodoInGoal = async (goalId: string, todoId: string) => {
+    try {
+      const found = goals.find((g) => g.id === goalId);
+      if (!found) return;
+
+      found.removeTodo(todoId);
+
+      await repository.save(found);
+      await fetchGoals(); // 상태 갱신
+    } catch (error) {
+      console.error('할 일 삭제 중 오류 발생:', error);
+    }
+  };
+
   return {
     goals,
     loading,
@@ -117,5 +171,8 @@ export function useTargetGoals() {
     updateGoalProgress,
     toggleGoalCompletion,
     deleteGoal,
+    addTodoToGoal,
+    toggleTodoInGoal,
+    deleteTodoInGoal,
   };
 }

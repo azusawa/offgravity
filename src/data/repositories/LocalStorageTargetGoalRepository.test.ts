@@ -127,4 +127,57 @@ describe('LocalStorageTargetGoalRepository 테스트 하네스', () => {
     expect(finalGoals[0].id).toBe('test-id-2');
     expect(finalGoals[0].title).toBe('두 번째 일상 목표');
   });
+
+  test('5. 하위 할 일(ToDo)을 추가하면 완료 상태에 따라 진척도가 자동 갱신 및 보존된다', async () => {
+    const goal = new TargetGoal({
+      id: 'test-todo-1',
+      title: '하위 할 일 연동 테스트',
+      period: 'weekly',
+      category: 'work',
+    });
+
+    await repository.save(goal);
+
+    // 1) 할 일 추가
+    goal.addTodo({
+      id: 'todo-sub-1',
+      title: '첫 번째 태스크',
+      isCompleted: false,
+      createdAt: new Date().toISOString(),
+    });
+    goal.addTodo({
+      id: 'todo-sub-2',
+      title: '두 번째 태스크',
+      isCompleted: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    await repository.save(goal);
+
+    // 로컬스토리지 저장 여부 검증
+    const rawData = JSON.parse(store['offgravity-target-goals']);
+    expect(rawData[0].todos.length).toBe(2);
+    expect(rawData[0].progress).toBe(0); // 0/2 완료이므로 0%
+
+    // 2) 할 일 토글
+    goal.toggleTodo('todo-sub-1');
+    expect(goal.progress).toBe(50); // 1/2 완료이므로 50%
+    await repository.save(goal);
+
+    const goalsFromRepo = await repository.getAll();
+    expect(goalsFromRepo[0].progress).toBe(50);
+    expect(goalsFromRepo[0].todos.length).toBe(2);
+    expect(goalsFromRepo[0].todos[0].isCompleted).toBe(true);
+
+    // 3) 할 일 삭제
+    goal.removeTodo('todo-sub-2');
+    expect(goal.progress).toBe(100); // 1/1 완료이므로 100%
+    expect(goal.isCompleted).toBe(true);
+    await repository.save(goal);
+
+    const finalGoalsFromRepo = await repository.getAll();
+    expect(finalGoalsFromRepo[0].progress).toBe(100);
+    expect(finalGoalsFromRepo[0].isCompleted).toBe(true);
+    expect(finalGoalsFromRepo[0].todos.length).toBe(1);
+  });
 });
