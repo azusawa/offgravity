@@ -103,5 +103,30 @@ export const ja = {
     buttonAdd: "追加",
     infoDesc: "予定は開始時間に応じて自動的に整列され、タイムラインにスムーズにマッピングされます。",
     deleteBlock: "予定削除"
+  },
+  project: {
+    title: "プロジェクト管理",
+    subtitle: "かんばんボードとガントチャートを有機的に切り替えながら、進捗を追跡し締め切りを管理します。",
+    kanban: "かんばんボード",
+    gantt: "ガントチャート",
+    todo: "未着手 (To Do)",
+    inProgress: "進行中 (In Progress)",
+    done: "完了 (Done)",
+    addTask: "タスク追加",
+    taskTitle: "タスク名",
+    taskTitlePlaceholder: "例) DBスキーマ設計、API連携",
+    taskDesc: "詳細内容",
+    taskDescPlaceholder: "タスクの具体的な説明を記入してください...",
+    startDate: "開始日",
+    endDate: "締め切り日",
+    submitAdd: "追加完了",
+    submitEdit: "修正完了",
+    progress: "進捗度",
+    noTasks: "登録されたプロジェクトタスクはありません。最初のタスクを追加して没頭を開始しましょう！",
+    deleteTask: "タスク削除",
+    confirmDelete: "このタスクを本当に削除しますか？",
+    editTask: "タスク修正",
+    errorAdd: "開始日は締め切り日より遅くすることはできません。",
+    dateDiffError: "日付の入力が正しくありません。"
   }
 };

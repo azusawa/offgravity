@@ -103,5 +103,30 @@ export const en = {
     buttonAdd: "Add",
     infoDesc: "Events are automatically sorted by start time and smoothly mapped onto the timeline.",
     deleteBlock: "Delete Event"
+  },
+  project: {
+    title: "Project Management",
+    subtitle: "Seamlessly switch between Kanban Board and Gantt Chart to track progress and manage deadlines.",
+    kanban: "Kanban Board",
+    gantt: "Gantt Chart",
+    todo: "To Do",
+    inProgress: "In Progress",
+    done: "Done",
+    addTask: "Add Task",
+    taskTitle: "Task Title",
+    taskTitlePlaceholder: "e.g. Design DB Schema, Integrate API",
+    taskDesc: "Description",
+    taskDescPlaceholder: "Write specific description for this task...",
+    startDate: "Start Date",
+    endDate: "Due Date",
+    submitAdd: "Add Task",
+    submitEdit: "Save Changes",
+    progress: "Progress",
+    noTasks: "No project tasks registered. Add your first task to start focusing!",
+    deleteTask: "Delete Task",
+    confirmDelete: "Are you sure you want to delete this task?",
+    editTask: "Edit Task",
+    errorAdd: "Start date cannot be later than due date.",
+    dateDiffError: "Invalid date inputs."
   }
 };

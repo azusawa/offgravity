@@ -7,6 +7,7 @@ import { useTargetGoals } from '@/hooks/useTargetGoals';
 import TargetGoalsView from '@/components/target/TargetGoalsView';
 import SchedulerView from '@/components/schedule/SchedulerView';
 import CalendarView from '@/components/calendar/CalendarView';
+import ProjectManagementView from '@/components/project/ProjectManagementView';
 import { 
   Clock, 
   Compass, 
@@ -32,8 +33,8 @@ export default function HomePage() {
   const { goals, toggleTodoInGoal } = useTargetGoals();
   
   // --- [상태 정의] ---
-  // 1. 활성 탭 상태 ('dashboard': 마인드셋 보드, 'targets': 목표 설정, 'scheduler': 스케줄러, 'calendar': 달력)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'targets' | 'scheduler' | 'calendar'>('dashboard');
+  // 1. 활성 탭 상태 ('dashboard': 마인드셋 보드, 'targets': 목표 설정, 'scheduler': 스케줄러, 'calendar': 달력, 'project': 프로젝트 관리)
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'targets' | 'scheduler' | 'calendar' | 'project'>('dashboard');
 
   // 2. 실시간 시계 상태
   const [time, setTime] = useState<string>('');
@@ -256,6 +257,8 @@ export default function HomePage() {
         </div>
       ) : activeTab === 'targets' ? (
         <TargetGoalsView />
+      ) : activeTab === 'project' ? (
+        <ProjectManagementView />
       ) : activeTab === 'scheduler' ? (
         <SchedulerView />
       ) : (

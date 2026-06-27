@@ -11,13 +11,14 @@ import {
   Target, 
   Calendar, 
   CalendarClock,
-  ChevronRight
+  ChevronRight,
+  ListTodo
 } from 'lucide-react';
 
 interface MainLayoutProps {
   children: React.ReactNode;
-  activeTab: 'dashboard' | 'targets' | 'scheduler' | 'calendar';
-  setActiveTab: (tab: 'dashboard' | 'targets' | 'scheduler' | 'calendar') => void;
+  activeTab: 'dashboard' | 'targets' | 'scheduler' | 'calendar' | 'project';
+  setActiveTab: (tab: 'dashboard' | 'targets' | 'scheduler' | 'calendar' | 'project') => void;
 }
 
 /**
@@ -145,6 +146,23 @@ export function MainLayout({ children, activeTab, setActiveTab }: MainLayoutProp
                 <span className="text-sm">{t('common.targetGoals')}</span>
               </div>
               {activeTab === 'targets' && <ChevronRight className="w-3.5 h-3.5 opacity-80 text-blue-750 dark:text-blue-200 transition-transform duration-300 group-hover:translate-x-0.5" />}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('project')}
+              className={`group w-full flex items-center justify-between px-4 py-2.5 rounded-lg font-medium transition-all duration-300 cursor-pointer border ${
+                activeTab === 'project'
+                  ? 'bg-blue-100/70 text-blue-700 border-blue-200/50 shadow-sm translate-x-1 dark:bg-blue-500/35 dark:text-white dark:border-blue-400/30 dark:shadow-[0_0_12px_rgba(59,130,246,0.15)]'
+                  : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-500/5 hover:text-zinc-900 dark:hover:text-zinc-100 border-transparent translate-x-0 hover:translate-x-0.5'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <ListTodo className={`w-4 h-4 transition-transform duration-300 group-hover:scale-110 ${
+                  activeTab === 'project' ? 'text-blue-700 dark:text-blue-200' : 'text-zinc-400 dark:text-zinc-500'
+                }`} />
+                <span className="text-sm">{t('project.title')}</span>
+              </div>
+              {activeTab === 'project' && <ChevronRight className="w-3.5 h-3.5 opacity-80 text-blue-750 dark:text-blue-200 transition-transform duration-300 group-hover:translate-x-0.5" />}
             </button>
             
             <button

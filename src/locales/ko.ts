@@ -103,5 +103,30 @@ export const ko = {
     buttonAdd: "추가",
     infoDesc: "일정은 시작 시간에 따라 자동으로 정렬되어 타임라인에 부드럽게 매핑됩니다.",
     deleteBlock: "일정 삭제"
+  },
+  project: {
+    title: "프로젝트 관리",
+    subtitle: "칸반 보드와 간트 차트를 유기적으로 스위칭하며 진행 상황을 추적하고 마감일을 관리합니다.",
+    kanban: "칸반 보드",
+    gantt: "간트 차트",
+    todo: "할 일 (To Do)",
+    inProgress: "진행 중 (In Progress)",
+    done: "완료 (Done)",
+    addTask: "작업 추가",
+    taskTitle: "작업명",
+    taskTitlePlaceholder: "예) DB 스키마 설계, API 연동",
+    taskDesc: "상세 내용",
+    taskDescPlaceholder: "해당 작업에 대한 구체적인 설명을 기입하세요...",
+    startDate: "시작일",
+    endDate: "마감일",
+    submitAdd: "추가 완료",
+    submitEdit: "수정 완료",
+    progress: "진척도",
+    noTasks: "등록된 프로젝트 작업이 없습니다. 첫 작업을 추가해 몰입을 개시하세요!",
+    deleteTask: "작업 삭제",
+    confirmDelete: "이 작업을 정말 삭제하시겠습니까?",
+    editTask: "작업 수정",
+    errorAdd: "시작일이 마감일보다 늦을 수 없습니다.",
+    dateDiffError: "날짜 입력이 잘못되었습니다."
   }
 };
