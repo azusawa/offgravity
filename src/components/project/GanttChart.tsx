@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { ProjectTask } from '@/domain/entities/ProjectTask';
 import { useTranslation } from '@/hooks/useTranslation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 interface GanttChartProps {
   tasks: ProjectTask[];
   updateTaskDates: (id: string, start: string, end: string) => Promise<void>;
+  reorderTasks: (reorderedTasks: ProjectTask[]) => Promise<void>;
 }
 
 /**
@@ -21,8 +22,182 @@ interface GanttChartProps {
 export default function GanttChart({
   tasks,
   updateTaskDates,
+  reorderTasks,
 }: GanttChartProps) {
   const { t } = useTranslation();
+
+  // 드래그 중 실시간 재배치 순서를 보관할 임시 상태 (순서 이동용)
+  const [tempTasks, setTempTasks] = useState<ProjectTask[] | null>(null);
+
+  // 현재 드래그 중인 리스트 아이템 ID 상태
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+
+  // 최종 렌더링과 위치 계산에 이용할 태스크 배열
+  const displayTasks = tempTasks || tasks;
+
+  // FLIP 애니메이션용: 드롭 직전 아이템들의 뷰포트 Y축 위치 보관
+  const prevPositionsRef = useRef<Record<string, number>>({});
+
+  // 드래그 시작 지연 캡처용 타이머 레퍼런스
+  const dragStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 모든 좌측 리스트 아이템들의 현재 Y 위치를 캡처하여 저장
+  const recordPositions = () => {
+    const positions: Record<string, number> = {};
+    displayTasks.forEach((task) => {
+      const el = document.querySelector(`[data-list-id="${task.id}"]`);
+      if (el) {
+        positions[task.id] = el.getBoundingClientRect().top;
+      }
+    });
+    prevPositionsRef.current = positions;
+  };
+
+  // FLIP 기법 레이아웃 트랜지션 애니메이션 실행 (좌측 리스트용)
+  useLayoutEffect(() => {
+    if (Object.keys(prevPositionsRef.current).length === 0) return;
+
+    displayTasks.forEach((task) => {
+      if (task.id === draggedTaskId) return;
+
+      const el = document.querySelector(`[data-list-id="${task.id}"]`) as HTMLElement;
+      if (!el) return;
+
+      const prevTop = prevPositionsRef.current[task.id];
+      if (prevTop === undefined) return;
+
+      const currentTop = el.getBoundingClientRect().top;
+      const deltaY = prevTop - currentTop;
+
+      if (deltaY !== 0) {
+        el.style.transform = `translateY(${deltaY}px)`;
+        el.style.transition = 'none';
+
+        requestAnimationFrame(() => {
+          el.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+          el.style.transform = 'translateY(0px)';
+        });
+
+        setTimeout(() => {
+          el.style.transition = '';
+          el.style.transform = '';
+        }, 300);
+      }
+    });
+
+    prevPositionsRef.current = {};
+  }, [displayTasks, draggedTaskId]);
+
+  // Plain Object와 도메인 인스턴스 양측 모두 무결하게 호환 가능한 복제 헬퍼
+  const cloneTask = (t: ProjectTask): ProjectTask => {
+    if (typeof t.clone === 'function') {
+      return t.clone();
+    }
+    return new ProjectTask({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      status: t.status,
+      startDate: t.startDate,
+      endDate: t.endDate,
+      progress: t.progress,
+      createdAt: t.createdAt,
+    });
+  };
+
+  const handleListDragEnd = () => {
+    if (dragStartTimerRef.current) {
+      clearTimeout(dragStartTimerRef.current);
+      dragStartTimerRef.current = null;
+    }
+    setDraggedTaskId(null);
+    setTempTasks(null);
+  };
+
+  // --- [좌측 리스트 순서 드래그 앤 드롭 핸들러] ---
+  const handleListDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+
+    if (dragStartTimerRef.current) {
+      clearTimeout(dragStartTimerRef.current);
+    }
+    
+    // 브라우저 캡처 후 상태 갱신
+    dragStartTimerRef.current = setTimeout(() => {
+      setDraggedTaskId(id);
+      setTempTasks(tasks.map(t => cloneTask(t)));
+      dragStartTimerRef.current = null;
+    }, 0);
+  };
+
+  // 브라우저 DND 이벤트 누락 및 외부 드래그 취소 대응 전역 mouseup/dragend 안전핀 (리스트 DND용)
+  useEffect(() => {
+    const handleGlobalDragEnd = () => {
+      if (draggedTaskId) {
+        handleListDragEnd();
+      }
+    };
+
+    if (draggedTaskId) {
+      window.addEventListener('mouseup', handleGlobalDragEnd);
+      window.addEventListener('dragend', handleGlobalDragEnd);
+    }
+
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalDragEnd);
+      window.removeEventListener('dragend', handleGlobalDragEnd);
+    };
+  }, [draggedTaskId]);
+
+  const handleListDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!draggedTaskId || !tempTasks) return;
+
+    // 좌측 리스트 내 다른 정적 아이템들 조회
+    const staticElements = Array.from(
+      document.querySelectorAll(`[data-list-status="static"]:not([data-list-id="${draggedTaskId}"])`)
+    ) as HTMLElement[];
+
+    const mouseY = e.clientY;
+    let insertIndex = staticElements.length; // 기본값: 맨 뒤
+
+    for (let i = 0; i < staticElements.length; i++) {
+      const el = staticElements[i];
+      const rect = el.getBoundingClientRect();
+      const centerY = rect.top + rect.height / 2;
+
+      if (mouseY < centerY) {
+        insertIndex = i;
+        break;
+      }
+    }
+
+    // 드래그 대상을 제외한 정적 리스트
+    const currentTemp = tempTasks.filter((t) => t.id !== draggedTaskId);
+
+    // 타겟 위치에 드래그 카드를 삽입
+    const draggedTask = tempTasks.find((t) => t.id === draggedTaskId);
+    if (!draggedTask) return;
+
+    const testTasks = [...currentTemp];
+    testTasks.splice(insertIndex, 0, draggedTask);
+
+    const isSameOrder = tempTasks.every((t, idx) => t.id === testTasks[idx]?.id);
+    if (!isSameOrder) {
+      recordPositions(); // FLIP 위치 기록
+      setTempTasks(testTasks);
+    }
+  };
+
+  const handleListDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    if (tempTasks) {
+      recordPositions();
+      await reorderTasks(tempTasks);
+    }
+    handleListDragEnd();
+  };
   
   // --- [날짜 연산 유틸리티 함수] ---
   const addDays = (date: Date, days: number): Date => {
@@ -215,23 +390,52 @@ export default function GanttChart({
             </div>
 
             {/* 리스트 본문 */}
-            <div className="divide-y divide-zinc-500/5">
-              {tasks.length === 0 ? (
+            <div 
+              onDragOver={handleListDragOver}
+              onDrop={handleListDrop}
+              className="divide-y divide-zinc-500/5"
+            >
+              {displayTasks.length === 0 ? (
                 <div className="py-20 text-center text-xs text-zinc-455">
                   {t('target.noGoals')}
                 </div>
               ) : (
-                tasks.map((task) => (
-                  <div key={task.id} className="h-[52px] flex flex-col justify-center py-2 text-xs">
-                    <div className="font-semibold text-zinc-700 dark:text-zinc-200 truncate mb-1">
-                      {task.title}
+                displayTasks.map((task) => {
+                  const isDraggingThis = task.id === draggedTaskId;
+
+                  const itemStyle = {
+                    transition: 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                  };
+
+                  const itemClassName = isDraggingThis
+                    ? "h-[52px] rounded-lg border border-dashed border-blue-500/35 bg-blue-500/[0.015] my-2 transition-all duration-200 cursor-grab opacity-50"
+                    : "h-[52px] flex flex-col justify-center py-2 text-xs cursor-grab active:cursor-grabbing hover:bg-zinc-500/5 px-2 rounded-lg transition-transform";
+
+                  return (
+                    <div
+                      key={task.id}
+                      data-list-id={task.id}
+                      data-list-status={isDraggingThis ? "placeholder" : "static"}
+                      draggable
+                      style={itemStyle}
+                      onDragStart={(e) => handleListDragStart(e, task.id)}
+                      onDragEnd={handleListDragEnd}
+                      className={itemClassName}
+                    >
+                      {!isDraggingThis && (
+                        <>
+                          <div className="font-semibold text-zinc-700 dark:text-zinc-200 truncate mb-1">
+                            {task.title}
+                          </div>
+                          <div className="flex items-center justify-between text-[9px] text-zinc-400 dark:text-zinc-500 font-mono">
+                            <span>{task.startDate} ~ {task.endDate}</span>
+                            <span>{task.progress}%</span>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <div className="flex items-center justify-between text-[9px] text-zinc-400 dark:text-zinc-500 font-mono">
-                      <span>{task.startDate} ~ {task.endDate}</span>
-                      <span>{task.progress}%</span>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -263,12 +467,20 @@ export default function GanttChart({
 
             {/* 타임라인 간트 바 매핑 영역 */}
             <div className="relative divide-y divide-zinc-500/5">
-              {tasks.length === 0 ? (
+              {displayTasks.length === 0 ? (
                 <div className="h-[120px] flex items-center justify-center text-xs text-zinc-400">
                   {t('project.noTasks')}
                 </div>
               ) : (
-                tasks.map((task) => {
+                displayTasks.map((task) => {
+                  if (task.id === draggedTaskId) {
+                    return (
+                      <div
+                        key={task.id}
+                        className="h-[52px] w-full flex items-center relative overflow-hidden bg-blue-500/[0.005] border-y border-dashed border-blue-500/5"
+                      />
+                    );
+                  }
                   const taskStart = parseDate(task.startDate);
                   const taskEnd = parseDate(task.endDate);
                   

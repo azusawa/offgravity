@@ -144,6 +144,7 @@ export default function ProjectManagementView() {
           <GanttChart
             tasks={tasks}
             updateTaskDates={updateTaskDates}
+            reorderTasks={reorderTasks}
           />
         )}
       </div>

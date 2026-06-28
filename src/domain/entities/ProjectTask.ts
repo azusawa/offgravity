@@ -127,4 +127,20 @@ export class ProjectTask {
     this.title = title.trim();
     this.description = description;
   }
+
+  /**
+   * 엔티티 복제 메서드
+   */
+  public clone(): ProjectTask {
+    return new ProjectTask({
+      id: this.id,
+      title: this.title,
+      description: this.description,
+      status: this.status,
+      startDate: this.startDate,
+      endDate: this.endDate,
+      progress: this.progress,
+      createdAt: this.createdAt,
+    });
+  }
 }

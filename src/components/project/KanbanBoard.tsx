@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useLayoutEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ProjectTask, TaskStatus } from '@/domain/entities/ProjectTask';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -47,6 +47,9 @@ export default function KanbanBoard({
 
   // FLIP 애니메이션용: 드롭 직전 카드들의 뷰포트 Y축 위치 보관
   const prevPositionsRef = useRef<Record<string, number>>({});
+
+  // 드래그 시작 지연 캡처용 타이머 레퍼런스
+  const dragStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 모든 작업 카드 엘리먼트들의 현재 Y 위치를 캡처하여 저장
   const recordPositions = () => {
@@ -102,21 +105,67 @@ export default function KanbanBoard({
   // 컬럼별 마우스 드래그 오버(dragOver) 시각 효과 상태
   const [dragOverCol, setDragOverCol] = useState<Record<string, boolean>>({});
 
+  // Plain Object와 도메인 인스턴스 양측 모두 무결하게 호환 가능한 복제 헬퍼
+  const cloneTask = (t: ProjectTask): ProjectTask => {
+    if (typeof t.clone === 'function') {
+      return t.clone();
+    }
+    return new ProjectTask({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      status: t.status,
+      startDate: t.startDate,
+      endDate: t.endDate,
+      progress: t.progress,
+      createdAt: t.createdAt,
+    });
+  };
+
+  const handleDragEnd = () => {
+    if (dragStartTimerRef.current) {
+      clearTimeout(dragStartTimerRef.current);
+      dragStartTimerRef.current = null;
+    }
+    setDraggedTaskId(null);
+    setTempTasks(null);
+  };
+
   // --- [HTML5 Drag & Drop 이벤트 핸들러] ---
   const handleDragStart = (e: React.DragEvent, id: string) => {
     e.dataTransfer.setData('text/plain', id);
     e.dataTransfer.effectAllowed = 'move';
+
+    if (dragStartTimerRef.current) {
+      clearTimeout(dragStartTimerRef.current);
+    }
+
     // 브라우저가 드래그 이미지(Ghost Image) 캡처를 안전하게 완료한 후 갱신
-    setTimeout(() => {
+    dragStartTimerRef.current = setTimeout(() => {
       setDraggedTaskId(id);
-      setTempTasks([...tasks]); // 드래그 중인 임시 태스크 배열 초기화
+      setTempTasks(tasks.map(t => cloneTask(t))); // 안전하게 깊은 복제 수행
+      dragStartTimerRef.current = null;
     }, 0);
   };
 
-  const handleDragEnd = () => {
-    setDraggedTaskId(null);
-    setTempTasks(null);
-  };
+  // 브라우저 DND 이벤트 누락 및 외부 드래그 취소 대응 전역 mouseup/dragend 안전핀
+  useEffect(() => {
+    const handleGlobalDragEnd = () => {
+      if (draggedTaskId) {
+        handleDragEnd();
+      }
+    };
+
+    if (draggedTaskId) {
+      window.addEventListener('mouseup', handleGlobalDragEnd);
+      window.addEventListener('dragend', handleGlobalDragEnd);
+    }
+
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalDragEnd);
+      window.removeEventListener('dragend', handleGlobalDragEnd);
+    };
+  }, [draggedTaskId]);
 
   const handleDragEnter = (e: React.DragEvent, status: TaskStatus) => {
     e.preventDefault();
@@ -201,14 +250,6 @@ export default function KanbanBoard({
     handleDragEnd();
   };
 
-  // 편집 다이얼로그 활성화
-  const openEditModal = (task: ProjectTask) => {
-    setEditingTask(task);
-    setEditTitle(task.title);
-    setEditDesc(task.description);
-    setErrorMsg('');
-  };
-
   // 편집 처리
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,6 +281,14 @@ export default function KanbanBoard({
         setEditingTask(null);
       }
     }
+  };
+
+  // 편집 다이얼로그 활성화
+  const openEditModal = (task: ProjectTask) => {
+    setEditingTask(task);
+    setEditTitle(task.title);
+    setEditDesc(task.description);
+    setErrorMsg('');
   };
 
   // 3대 컬럼 선언 명세서
@@ -304,23 +353,15 @@ export default function KanbanBoard({
                 </div>
               ) : (
                 colTasks.map((task) => {
-                  // 드래그 중인 원래 위치는 파란색 가이드 플레이스홀더로 렌더링하여
-                  // 공간이 벌어질 자리를 알기 쉽게 함
-                  if (task.id === draggedTaskId) {
-                    return (
-                      <div
-                        key={task.id}
-                        data-task-id={task.id}
-                        data-task-status={task.status}
-                        className="rounded-xl border-2 border-dashed border-blue-500/35 bg-blue-500/[0.015] min-h-[140px] mb-2.5 transition-all duration-200"
-                        title={task.title}
-                      />
-                    );
-                  }
+                  const isDraggingThis = task.id === draggedTaskId;
 
                   const cardStyle = {
                     transition: 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
                   };
+
+                  const cardClassName = isDraggingThis
+                    ? "rounded-xl border-2 border-dashed border-blue-500/35 bg-blue-500/[0.015] min-h-[140px] mb-2.5 transition-all duration-200 cursor-grab opacity-50"
+                    : "group glass-panel p-4 flex flex-col justify-between min-h-[140px] cursor-grab active:cursor-grabbing hover:scale-[1.015] duration-200 shadow-sm dark:shadow-[0_4px_16px_rgba(0,0,0,0.45)] mb-2.5 transition-transform";
 
                   return (
                     <div
@@ -331,68 +372,78 @@ export default function KanbanBoard({
                       style={cardStyle}
                       onDragStart={(e) => handleDragStart(e, task.id)}
                       onDragEnd={handleDragEnd}
-                      onDoubleClick={() => openEditModal(task)}
-                      className="group glass-panel p-4 flex flex-col justify-between min-h-[140px] cursor-grab active:cursor-grabbing hover:scale-[1.015] duration-200 shadow-sm dark:shadow-[0_4px_16px_rgba(0,0,0,0.45)] mb-2.5 transition-transform"
+                      onDoubleClick={isDraggingThis ? undefined : () => openEditModal(task)}
+                      className={cardClassName}
                     >
-                      <div>
-                        {/* 작업명 및 호버 퀵 액션 */}
-                        <div className="flex justify-between items-start gap-2 mb-1.5">
-                          <h4 className="text-sm font-semibold text-zinc-800 dark:text-zinc-150 leading-snug group-hover:text-zinc-950 dark:group-hover:text-zinc-50 transition-colors">
-                            {task.title}
-                          </h4>
-                          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 transition-opacity duration-200">
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(task)}
-                              className="p-1 rounded text-zinc-450 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-500/10 transition-colors cursor-pointer border border-transparent"
-                              title={t('project.editTask')}
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTask(task.id)}
-                              className="p-1 rounded text-zinc-450 hover:text-red-500 hover:bg-red-500/5 transition-colors cursor-pointer border border-transparent"
-                              title={t('project.deleteTask')}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                      {!isDraggingThis && (
+                        <>
+                          <div>
+                            {/* 작업명 및 호버 퀵 액션 */}
+                            <div className="flex justify-between items-start gap-2 mb-1.5">
+                              <h4 className="text-sm font-semibold text-zinc-800 dark:text-zinc-150 leading-snug group-hover:text-zinc-950 dark:group-hover:text-zinc-50 transition-colors">
+                                {task.title}
+                              </h4>
+                              <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 transition-opacity duration-200">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditModal(task);
+                                  }}
+                                  className="p-1 rounded text-zinc-455 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-500/10 transition-colors cursor-pointer border border-transparent"
+                                  title={t('project.editTask')}
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteTask(task.id);
+                                  }}
+                                  className="p-1 rounded text-zinc-455 hover:text-red-500 hover:bg-red-500/5 transition-colors cursor-pointer border border-transparent"
+                                  title={t('project.deleteTask')}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* 작업 설명 */}
+                            {task.description && (
+                              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 line-clamp-2 leading-relaxed mb-3">
+                                {task.description}
+                              </p>
+                            )}
                           </div>
-                        </div>
 
-                        {/* 작업 설명 */}
-                        {task.description && (
-                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 line-clamp-2 leading-relaxed mb-3">
-                            {task.description}
-                          </p>
-                        )}
-                      </div>
+                          <div className="space-y-2 border-t border-zinc-500/10 pt-2.5">
+                            {/* 기간 표시 */}
+                            <div className="flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-400 font-mono">
+                              <Calendar className="w-3 h-3 text-zinc-500" />
+                              <span>{task.startDate}</span>
+                              <span>~</span>
+                              <span>{task.endDate}</span>
+                            </div>
 
-                      <div className="space-y-2 border-t border-zinc-500/10 pt-2.5">
-                        {/* 기간 표시 */}
-                        <div className="flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-400 font-mono">
-                          <Calendar className="w-3 h-3 text-zinc-500" />
-                          <span>{task.startDate}</span>
-                          <span>~</span>
-                          <span>{task.endDate}</span>
-                        </div>
-
-                        {/* 진척도 수동 조율 */}
-                        <div className="flex items-center justify-between gap-3 text-[10px] text-zinc-450 dark:text-zinc-400 font-mono">
-                          <span className="font-semibold">{t('project.progress')}</span>
-                          <div className="flex-1 flex items-center gap-1.5">
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={task.progress}
-                              onChange={(e) => updateTaskProgress(task.id, parseInt(e.target.value, 10))}
-                              className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-800 dark:accent-zinc-200"
-                            />
-                            <span className="w-7 text-right">{task.progress}%</span>
+                            {/* 진척도 수동 조율 */}
+                            <div className="flex items-center justify-between gap-3 text-[10px] text-zinc-450 dark:text-zinc-400 font-mono">
+                              <span className="font-semibold">{t('project.progress')}</span>
+                              <div className="flex-1 flex items-center gap-1.5">
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  value={task.progress}
+                                  onChange={(e) => updateTaskProgress(task.id, parseInt(e.target.value, 10))}
+                                  className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-800 dark:accent-zinc-200"
+                                />
+                                <span className="w-7 text-right">{task.progress}%</span>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
+                        </>
+                      )}
                     </div>
                   );
                 })
@@ -408,7 +459,7 @@ export default function KanbanBoard({
           <div className="glass-panel w-full max-w-md p-6 bg-opacity-95 dark:bg-opacity-95 shadow-2xl relative animate-fade-in-up">
             <button
               onClick={() => setEditingTask(null)}
-              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-zinc-500/10 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer flex items-center justify-center border border-transparent"
+              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-zinc-500/10 text-zinc-450 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer flex items-center justify-center border border-transparent"
               aria-label="닫기"
             >
               <X className="w-4 h-4" />
