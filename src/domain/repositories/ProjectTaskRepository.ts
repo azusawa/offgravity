@@ -27,4 +27,9 @@ export interface ProjectTaskRepository {
    * 특정 ID의 태스크 삭제
    */
   delete(id: string): Promise<void>;
+
+  /**
+   * 모든 태스크 목록의 변경 사항 및 순서 전체 저장
+   */
+  saveAll(tasks: ProjectTask[]): Promise<void>;
 }

@@ -23,11 +23,11 @@ export default function ProjectManagementView() {
     loading,
     mounted,
     addTask,
-    updateTaskStatus,
     updateTaskDates,
     updateTaskProgress,
     updateTaskInfo,
     deleteTask,
+    reorderTasks,
   } = useProjectTasks();
 
   const [activeView, setActiveView] = useState<'kanban' | 'gantt'>('kanban');
@@ -135,10 +135,10 @@ export default function ProjectManagementView() {
         {activeView === 'kanban' ? (
           <KanbanBoard
             tasks={tasks}
-            updateTaskStatus={updateTaskStatus}
             updateTaskProgress={updateTaskProgress}
             updateTaskInfo={updateTaskInfo}
             deleteTask={deleteTask}
+            reorderTasks={reorderTasks}
           />
         ) : (
           <GanttChart

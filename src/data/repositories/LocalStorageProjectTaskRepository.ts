@@ -104,4 +104,20 @@ export class LocalStorageProjectTaskRepository implements ProjectTaskRepository 
       console.error('로컬스토리지 프로젝트 태스크 삭제 중 오류 발생:', error);
     }
   }
+
+  /**
+   * 모든 태스크 목록의 변경 사항 및 순서 전체 저장
+   */
+  public async saveAll(tasks: ProjectTask[]): Promise<void> {
+    if (!this.isBrowserAvailable()) {
+      return;
+    }
+
+    try {
+      const dtos = tasks.map((task) => ProjectTaskMapper.toDTO(task));
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(dtos));
+    } catch (error) {
+      console.error('로컬스토리지 프로젝트 태스크 전체 저장 중 오류 발생:', error);
+    }
+  }
 }

@@ -138,6 +138,16 @@ export function useProjectTasks() {
     }
   };
 
+  // 9. 태스크 순서 변경 및 영구 저장 함수
+  const reorderTasks = async (reorderedTasks: ProjectTask[]) => {
+    try {
+      setTasks(reorderedTasks);
+      await repository.saveAll(reorderedTasks);
+    } catch (error) {
+      console.error('태스크 순서 재정렬 실패:', error);
+    }
+  };
+
   return {
     tasks,
     loading,
@@ -148,5 +158,6 @@ export function useProjectTasks() {
     updateTaskProgress,
     updateTaskInfo,
     deleteTask,
+    reorderTasks,
   };
 }
