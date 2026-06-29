@@ -458,6 +458,9 @@ export default function GanttChart({
     if (progress === 100) {
       return 'bg-emerald-500 dark:bg-emerald-500/80 border-emerald-600/35 text-white dark:text-zinc-100';
     }
+    if (progress === 0) {
+      return 'bg-zinc-400 dark:bg-zinc-600 border-zinc-500/30 text-white dark:text-zinc-200';
+    }
     return 'bg-blue-500 dark:bg-blue-500/80 border-blue-600/35 text-white dark:text-zinc-100';
   };
 
@@ -675,6 +678,9 @@ export default function GanttChart({
                     }
                     if (progress === 100) {
                       return 'bg-emerald-500 dark:bg-emerald-500/80 border-emerald-600/35 text-white dark:text-zinc-100';
+                    }
+                    if (progress === 0) {
+                      return 'bg-zinc-400 dark:bg-zinc-650 border-zinc-500/30 text-white dark:text-zinc-200';
                     }
                     return 'bg-blue-500 dark:bg-blue-500/80 border-blue-600/35 text-white dark:text-zinc-100';
                   };
