@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { ProjectTask } from '@/domain/entities/ProjectTask';
 import { useTranslation } from '@/hooks/useTranslation';
 import { ChevronLeft, ChevronRight, Folder, FolderOpen, FileText, ChevronDown as ChevronDownIcon, ChevronRight as ChevronRightIcon } from 'lucide-react';
@@ -306,16 +306,41 @@ export default function GanttChart({
     return new Date(y, m - 1, d);
   };
 
+  // 줌 모드 상태 ('3weeks' | '1month' | 'all')
+  const [zoomMode, setZoomMode] = useState<'3weeks' | '1month' | 'all'>('3weeks');
+
   // 간트 타임라인의 중심이 되는 기준 날짜 (기본값: 오늘)
   const [baseDate, setBaseDate] = useState<Date>(() => new Date());
   
-  // 타임라인에 렌더링할 전체 일수 (3주일 분량)
-  const totalDays = 21;
-  
-  // 그리드 첫 날 설정 (기준일로부터 4일 전으로 잡아 오늘 시점이 중앙-좌측 부근에 오도록 조정)
-  const gridStartDate = addDays(baseDate, -4);
+  // 줌 모드에 따라 가변하는 타임라인 설정 변수들 (가로 날짜 셀 너비 cellWidth는 36px로 고정)
+  let totalDays = 21;
+  let gridStartDate = addDays(baseDate, -4);
 
-  // 21일간의 날짜 배열 생성
+  if (zoomMode === '3weeks') {
+    totalDays = 21;
+    gridStartDate = addDays(baseDate, -4);
+  } else if (zoomMode === '1month') {
+    totalDays = 30;
+    gridStartDate = addDays(baseDate, -5);
+  } else if (zoomMode === 'all') {
+    const validTasks = tasks.filter(t => t.type !== 'group' && t.startDate && t.endDate);
+    if (validTasks.length === 0) {
+      totalDays = 21;
+      gridStartDate = addDays(baseDate, -4);
+    } else {
+      const startTimes = validTasks.map(t => new Date(t.startDate).getTime());
+      const endTimes = validTasks.map(t => new Date(t.endDate).getTime());
+      const rangeStart = new Date(Math.min(...startTimes));
+      const rangeEnd = new Date(Math.max(...endTimes));
+      
+      // 시작일 3일 전부터 마감일 3일 후까지 가로 스크롤 범위 확보
+      gridStartDate = addDays(rangeStart, -3);
+      const targetEndDateWithBuffer = addDays(rangeEnd, 3);
+      totalDays = Math.max(7, getDiffDays(targetEndDateWithBuffer, gridStartDate) + 1);
+    }
+  }
+
+  // 줌 모드에 맞춰 동적으로 날짜 배열 생성
   const timelineDates: Date[] = [];
   for (let i = 0; i < totalDays; i++) {
     timelineDates.push(addDays(gridStartDate, i));
@@ -328,14 +353,10 @@ export default function GanttChart({
   if (holidaySettings.showJP) activeCountries.push('JP');
   if (holidaySettings.showUS) activeCountries.push('US');
 
-  const [holidays, setHolidays] = useState<string[]>([]);
-
-  // 21일간의 그리드 날짜 배열 생성 유틸을 바탕으로 범위 내 공휴일 추출
-  // timelineDates의 범위(시작년월~종료년월)를 감지
-  useEffect(() => {
+  // timelineDates의 범위(시작년월~종료년월)를 감지하여 공휴일 리스트 동기 연산 (성능 최적화 및 Cascading Render 방지)
+  const holidays = useMemo<string[]>(() => {
     if (timelineDates.length === 0 || activeCountries.length === 0) {
-      setHolidays([]);
-      return;
+      return [];
     }
     const startYear = timelineDates[0].getFullYear();
     const startMonth = timelineDates[0].getMonth();
@@ -350,8 +371,16 @@ export default function GanttChart({
       const h2 = HolidayProvider.getHolidays(endYear, endMonth, activeCountries);
       h2.forEach(h => holidayDatesSet.add(h.date));
     }
-    setHolidays(Array.from(holidayDatesSet));
-  }, [baseDate, holidaySettings.showKR, holidaySettings.showJP, holidaySettings.showUS]);
+    return Array.from(holidayDatesSet);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    baseDate,
+    zoomMode,
+    tasks,
+    holidaySettings.showKR,
+    holidaySettings.showJP,
+    holidaySettings.showUS
+  ]);
 
   const isHoliday = (date: Date): boolean => {
     const formatted = formatDate(date);
@@ -390,9 +419,15 @@ export default function GanttChart({
     return '';
   };
 
-  // 타임라인 네비게이션 액션
-  const goPrev = () => setBaseDate(prev => addDays(prev, -7));
-  const goNext = () => setBaseDate(prev => addDays(prev, 7));
+  // 타임라인 네비게이션 액션 (3주 모드면 7일씩, 1달 모드면 30일씩)
+  const goPrev = () => {
+    const shift = zoomMode === '1month' ? -30 : -7;
+    setBaseDate(prev => addDays(prev, shift));
+  };
+  const goNext = () => {
+    const shift = zoomMode === '1month' ? 30 : 7;
+    setBaseDate(prev => addDays(prev, shift));
+  };
   const goToday = () => setBaseDate(new Date());
 
   // 마우스 실시간 드래그 상태
@@ -483,59 +518,104 @@ export default function GanttChart({
     };
   }, [dragState, updateTaskDates]);
 
-  // 완료 여부별 바 색상 클래스 분기
-  const getBarColorClass = (progress: number) => {
-    if (progress === 100) {
-      return 'bg-emerald-500 dark:bg-emerald-500/80 border-emerald-600/35 text-white dark:text-zinc-100';
+  // timelineDates를 순회하며 동일 년/월 블록 픽셀 크기를 연산 (2단 헤더용)
+  const monthBlocks: { year: number; month: number; width: number }[] = [];
+  timelineDates.forEach((date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const lastBlock = monthBlocks[monthBlocks.length - 1];
+
+    if (lastBlock && lastBlock.year === year && lastBlock.month === month) {
+      lastBlock.width += 36; // cellWidth는 36으로 고정
+    } else {
+      monthBlocks.push({ year, month, width: 36 });
     }
-    if (progress === 0) {
-      return 'bg-zinc-400 dark:bg-zinc-600 border-zinc-500/30 text-white dark:text-zinc-200';
-    }
-    return 'bg-blue-500 dark:bg-blue-500/80 border-blue-600/35 text-white dark:text-zinc-100';
-  };
+  });
 
   return (
     <div className="glass-panel p-5 overflow-hidden font-sans select-none">
       {/* 1. 간트 차트 헤더 제어 영역 */}
-      <div className="flex items-center justify-between gap-4 mb-6 border-b border-zinc-500/10 pb-4">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-zinc-500/10 pb-4">
+        <div className="flex items-center gap-3">
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-200">
             {timelineDates[0].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
             {' ~ '}
             {timelineDates[totalDays - 1].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
           </h3>
+
+          {/* 줌 모드 선택 토글 바 */}
+          <div className="flex items-center gap-1 bg-zinc-500/5 p-0.5 rounded-lg border border-zinc-500/10 text-[10px] font-bold select-none ml-2">
+            <button
+              type="button"
+              onClick={() => setZoomMode('3weeks')}
+              className={`px-2 py-1 rounded transition-all cursor-pointer ${
+                zoomMode === '3weeks'
+                  ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
+                  : 'text-zinc-450 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              3주
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoomMode('1month')}
+              className={`px-2 py-1 rounded transition-all cursor-pointer ${
+                zoomMode === '1month'
+                  ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
+                  : 'text-zinc-450 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              1달
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoomMode('all')}
+              className={`px-2 py-1 rounded transition-all cursor-pointer ${
+                zoomMode === 'all'
+                  ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
+                  : 'text-zinc-450 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              전체
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={goPrev}
-            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-500/5 text-zinc-650 dark:text-zinc-300 transition-colors cursor-pointer flex items-center justify-center"
-            title="이전 주"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={goToday}
-            className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-500/5 text-[10px] font-bold tracking-tight text-zinc-650 dark:text-zinc-300 transition-colors cursor-pointer"
-          >
-            TODAY
-          </button>
-          <button
-            type="button"
-            onClick={goNext}
-            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-500/5 text-zinc-650 dark:text-zinc-300 transition-colors cursor-pointer flex items-center justify-center"
-            title="다음 주"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+        {zoomMode !== 'all' && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={goPrev}
+              className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-500/5 text-zinc-650 dark:text-zinc-300 transition-colors cursor-pointer flex items-center justify-center"
+              title={zoomMode === '1month' ? "이전 달" : "이전 주"}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={goToday}
+              className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-500/5 text-[10px] font-bold tracking-tight text-zinc-650 dark:text-zinc-300 transition-colors cursor-pointer"
+            >
+              TODAY
+            </button>
+            <button
+              type="button"
+              onClick={goNext}
+              className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-500/5 text-zinc-650 dark:text-zinc-300 transition-colors cursor-pointer flex items-center justify-center"
+              title={zoomMode === '1month' ? "다음 달" : "다음 주"}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 2. 간트 차트 타임라인 레이아웃 */}
       <div className="w-full overflow-x-auto">
-        <div className="min-w-[850px] flex">
+        <div 
+          style={{ minWidth: `${256 + totalDays * 36}px` }} 
+          className="flex"
+        >
           
           {/* A. 좌측 영역: 태스크 명세 요약 */}
           <div 
@@ -641,19 +721,35 @@ export default function GanttChart({
 
           {/* B. 우측 영역: 그리드 캘린더 및 바 시각화 */}
           <div className="flex-1 flex flex-col relative overflow-hidden">
-            <div className="h-14 flex border-b border-zinc-500/10">
-              {timelineDates.map((date, idx) => {
-                const dayName = t('calendar.days')[date.getDay()];
-                return (
+            <div className="h-14 flex flex-col border-b border-zinc-500/10 flex-shrink-0">
+              {/* 상단 단: 월별 병합 배너 */}
+              <div className="h-7 flex border-b border-zinc-500/5 select-none bg-zinc-500/[0.015] dark:bg-zinc-500/[0.02]">
+                {monthBlocks.map((block, idx) => (
                   <div
                     key={idx}
-                    className={`w-9 flex-shrink-0 flex flex-col items-center justify-center text-[10px] border-r border-zinc-500/5 font-mono ${getHeaderDayColorClass(date)}`}
+                    style={{ width: `${block.width}px` }}
+                    className="h-full border-r border-zinc-500/5 flex items-center justify-start pl-3 text-[11.5px] font-bold text-zinc-500 dark:text-zinc-400 font-sans tracking-wide"
                   >
-                    <span>{date.getDate()}</span>
-                    <span className="text-[8px] opacity-75">{dayName}</span>
+                    {block.year}년 {block.month}월
                   </div>
-                );
-              })}
+                ))}
+              </div>
+              
+              {/* 하단 단: 날짜와 요일 */}
+              <div className="h-7 flex">
+                {timelineDates.map((date, idx) => {
+                  const dayName = t('calendar.days')[date.getDay()];
+                  return (
+                    <div
+                      key={idx}
+                      className={`w-9 flex-shrink-0 flex flex-col items-center justify-center text-[10.5px] border-r border-zinc-500/5 font-mono ${getHeaderDayColorClass(date)}`}
+                    >
+                      <span className="leading-none text-[10.5px] font-bold mb-0.5">{date.getDate()}</span>
+                      <span className="leading-none text-[8.5px] opacity-75">{dayName}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="relative divide-y divide-zinc-500/5">
