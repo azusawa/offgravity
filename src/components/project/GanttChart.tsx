@@ -6,6 +6,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { ChevronLeft, ChevronRight, Folder, FolderOpen, FileText, ChevronDown as ChevronDownIcon, ChevronRight as ChevronRightIcon } from 'lucide-react';
 import { useHolidaySettings } from '@/hooks/useHolidaySettings';
 import { HolidayProvider } from '@/domain/services/HolidayProvider';
+import { ProjectTaskTreeService } from '@/domain/services/ProjectTaskTreeService';
 
 interface GanttChartProps {
   tasks: ProjectTask[];
@@ -192,19 +193,50 @@ export default function GanttChart({
     e.preventDefault();
     if (!draggedTaskId || !tempTasks) return;
 
+    // 1. 드래그 중인 노드 탐색
     const draggedTask = tempTasks.find((t) => t.id === draggedTaskId);
     if (!draggedTask) return;
-    const targetParentId = draggedTask.parentId; // 드래그 대상의 부모 ID
 
-    // 동일 parentId를 가진 형제 노드 엘리먼트들만 조회 (정적 노드들)
+    // 2. 트리 조립 (tempTasks 복사본 사용)
+    const clonedTasksForTree = tempTasks.map(t => cloneTask(t));
+    const roots = ProjectTaskTreeService.buildTree(clonedTasksForTree);
+
+    // 3. 드래그 노드와 부모 노드 추적
+    let siblings: ProjectTask[] = [];
+    let parentNode: ProjectTask | null = null;
+
+    if (draggedTask.parentId) {
+      // 트리 내에서 부모 노드를 재귀적으로 찾기
+      const findParent = (nodes: ProjectTask[]): ProjectTask | null => {
+        for (const n of nodes) {
+          if (n.id === draggedTask.parentId) return n;
+          if (n.children) {
+            const found = findParent(n.children);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      parentNode = findParent(roots);
+      if (parentNode && parentNode.children) {
+        siblings = parentNode.children;
+      }
+    } else {
+      siblings = roots;
+    }
+
+    if (siblings.length <= 1) return;
+
+    // 4. 형제 노드 DOM 엘리먼트들 (드래그 중인 대상 제외)
     const siblingElements = Array.from(
       document.querySelectorAll(
-        `[data-list-status="static"][data-parent-id="${targetParentId ?? 'root'}"]:not([data-list-id="${draggedTaskId}"])`
+        `[data-list-status="static"][data-parent-id="${draggedTask.parentId ?? 'root'}"]:not([data-list-id="${draggedTaskId}"])`
       )
     ) as HTMLElement[];
 
+    // 5. 마우스의 Y 위치 기반 삽입될 인덱스 계산
     const mouseY = e.clientY;
-    let insertIndexInSiblings = siblingElements.length; // 형제 노드들 사이에서의 위치
+    let insertIndexInSiblings = siblingElements.length;
 
     for (let i = 0; i < siblingElements.length; i++) {
       const el = siblingElements[i];
@@ -217,28 +249,26 @@ export default function GanttChart({
       }
     }
 
-    // 형제들의 ID 목록
-    const siblingIds = siblingElements.map((el) => el.getAttribute('data-list-id')!);
-    
-    // 형제 리스트 내 적절한 위치에 드래그 노드 ID 삽입
-    siblingIds.splice(insertIndexInSiblings, 0, draggedTaskId);
+    // 6. 형제 리스트(siblings) 상에서 드래그 중인 노드의 현재 인덱스 파악
+    const draggedNodeIndex = siblings.findIndex(n => n.id === draggedTaskId);
+    if (draggedNodeIndex === -1) return;
 
-    // 전체 tempTasks 에서 해당 형제들의 글로벌 인덱스를 가져와 siblingIds 순서에 맞게 스왑 적용
-    const newTempTasks = tempTasks.map(t => cloneTask(t));
-    const siblingIndicesInGlobal = siblingIds.map((id) =>
-      tempTasks.findIndex((t) => t.id === id)
-    );
-    const sortedGlobalIndices = [...siblingIndicesInGlobal].sort((a, b) => a - b);
+    // 순서에 변화가 있는지 미리 확인 (이미 동일한 위치로 드래그오버 중인 경우 무시)
+    if (insertIndexInSiblings === draggedNodeIndex) {
+      return;
+    }
 
-    siblingIds.forEach((id, idx) => {
-      const targetGlobalIdx = sortedGlobalIndices[idx];
-      const taskInstance = tempTasks.find((t) => t.id === id)!;
-      newTempTasks[targetGlobalIdx] = cloneTask(taskInstance);
-    });
+    // 7. siblings 배열 상에서 순서 정렬 실행
+    const [draggedNode] = siblings.splice(draggedNodeIndex, 1);
+    siblings.splice(insertIndexInSiblings, 0, draggedNode);
 
+    // 8. 갱신된 트리를 다시 1차원 플랫 리스트로 펼침
+    const newTempTasks = ProjectTaskTreeService.flattenTree(roots);
+
+    // 9. 변경 감지 및 애니메이션/상태 갱신
     const isSameOrder = tempTasks.every((t, idx) => t.id === newTempTasks[idx]?.id);
     if (!isSameOrder) {
-      recordPositions(); // FLIP 위치 기록
+      recordPositions();
       setTempTasks(newTempTasks);
     }
   };
@@ -508,18 +538,18 @@ export default function GanttChart({
         <div className="min-w-[850px] flex">
           
           {/* A. 좌측 영역: 태스크 명세 요약 */}
-          <div className="w-64 border-r border-zinc-500/10 pr-4 flex-shrink-0">
+          <div 
+            onDragOver={handleListDragOver}
+            onDrop={handleListDrop}
+            className="w-64 border-r border-zinc-500/10 pr-4 flex-shrink-0 pb-7"
+          >
             {/* 리스트 헤더 */}
             <div className="h-14 flex items-center text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider border-b border-zinc-500/10">
               {t('project.taskTitle')}
             </div>
 
             {/* 리스트 본문 */}
-            <div 
-              onDragOver={handleListDragOver}
-              onDrop={handleListDrop}
-              className="divide-y divide-zinc-500/5"
-            >
+            <div className="divide-y divide-zinc-500/5 pb-6">
               {visibleTasks.length === 0 ? (
                 <div className="py-20 text-center text-xs text-zinc-455">
                   {t('target.noGoals')}
