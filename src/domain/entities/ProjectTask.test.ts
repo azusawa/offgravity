@@ -80,4 +80,59 @@ describe('ProjectTask 도메인 비즈니스 규칙 테스트', () => {
       task.updateDates('2026-06-29', '2026-06-28');
     }).toThrow('시작일은 종료일보다 늦을 수 없습니다.');
   });
+
+  test('5. 그룹 노드(Group) 생성 및 자식 연계 집계 검증', () => {
+    // 그룹 노드 생성
+    const groupTask = new ProjectTask({
+      id: 'g-1',
+      title: '게시판 구현',
+      type: 'group',
+      startDate: '2026-06-27',
+      endDate: '2026-06-28',
+    });
+
+    expect(groupTask.type).toBe('group');
+    expect(groupTask.parentId).toBeNull();
+
+    // 자식 태스크 1
+    const child1 = new ProjectTask({
+      id: 't-6',
+      title: '내용 생성',
+      startDate: '2026-06-27',
+      endDate: '2026-06-29',
+      progress: 100, // done 상태 자동 전환
+      parentId: 'g-1',
+    });
+
+    // 자식 태스크 2
+    const child2 = new ProjectTask({
+      id: 't-7',
+      title: '내용 삭제',
+      startDate: '2026-06-28',
+      endDate: '2026-07-02',
+      progress: 0, // todo 상태
+      parentId: 'g-1',
+    });
+
+    // 집계 실행
+    groupTask.aggregateFromChildren([child1, child2]);
+
+    // 시작일은 자식 중 최소인 2026-06-27, 마감일은 최대인 2026-07-02로 연장되어야 함
+    expect(groupTask.startDate).toBe('2026-06-27');
+    expect(groupTask.endDate).toBe('2026-07-02');
+
+    // 진척도는 (100 + 0) / 2 = 50%
+    expect(groupTask.progress).toBe(50);
+
+    // 상태는 자식들의 상태가 done, todo가 섞여있으므로 in_progress
+    expect(groupTask.status).toBe('in_progress');
+
+    // 자식2도 마저 완료 상태로 수정
+    child2.updateProgress(100);
+    groupTask.aggregateFromChildren([child1, child2]);
+
+    // 모든 자식이 done이므로 그룹 상태도 done, 진척도 100%
+    expect(groupTask.progress).toBe(100);
+    expect(groupTask.status).toBe('done');
+  });
 });

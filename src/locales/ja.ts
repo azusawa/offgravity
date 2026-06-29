@@ -127,6 +127,12 @@ export const ja = {
     confirmDelete: "このタスクを本当に削除しますか？",
     editTask: "タスク修正",
     errorAdd: "開始日は締め切り日より遅くすることはできません。",
-    dateDiffError: "日付の入力が正しくありません。"
+    dateDiffError: "日付の入力が正しくありません。",
+    taskType: "タイプ",
+    typeTask: "タスク",
+    typeGroup: "グループ",
+    parentGroup: "上位グループ",
+    noParent: "なし (最上位)",
+    addGroup: "グループ追加"
   }
 };

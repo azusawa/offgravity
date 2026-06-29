@@ -127,6 +127,12 @@ export const ko = {
     confirmDelete: "이 작업을 정말 삭제하시겠습니까?",
     editTask: "작업 수정",
     errorAdd: "시작일이 마감일보다 늦을 수 없습니다.",
-    dateDiffError: "날짜 입력이 잘못되었습니다."
+    dateDiffError: "날짜 입력이 잘못되었습니다.",
+    taskType: "유형",
+    typeTask: "작업",
+    typeGroup: "그룹",
+    parentGroup: "상위 그룹",
+    noParent: "없음 (최상위)",
+    addGroup: "그룹 추가"
   }
 };

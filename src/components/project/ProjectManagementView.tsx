@@ -38,6 +38,8 @@ export default function ProjectManagementView() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<TaskStatus>('todo');
+  const [taskType, setTaskType] = useState<'task' | 'group'>('task');
+  const [parentId, setParentId] = useState<string>(''); // 빈 문자열은 최상위
   
   // 날짜 기본값 설정 (시작일: 오늘, 마감일: 내일)
   const getTodayString = () => new Date().toISOString().split('T')[0];
@@ -73,8 +75,10 @@ export default function ProjectManagementView() {
         title,
         description,
         status,
-        startDate,
-        endDate,
+        startDate: taskType === 'group' ? getTodayString() : startDate,
+        endDate: taskType === 'group' ? getTomorrowString() : endDate,
+        type: taskType,
+        parentId: parentId === '' ? null : parentId,
       });
       // 폼 비우기 및 모달 닫기
       setTitle('');
@@ -82,6 +86,8 @@ export default function ProjectManagementView() {
       setStatus('todo');
       setStartDate(getTodayString());
       setEndDate(getTomorrowString());
+      setTaskType('task');
+      setParentId('');
       setIsModalOpen(false);
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -166,13 +172,47 @@ export default function ProjectManagementView() {
             </h3>
 
             <form onSubmit={handleAddTaskSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">{t('project.taskType')}</label>
+                  <select
+                    value={taskType}
+                    onChange={(e) => setTaskType(e.target.value as 'task' | 'group')}
+                    className="w-full bg-zinc-500/5 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-350 outline-none focus:border-zinc-400 dark:focus:border-zinc-700 cursor-pointer"
+                  >
+                    <option value="task">{t('project.typeTask')}</option>
+                    <option value="group">{t('project.typeGroup')}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">{t('project.parentGroup')}</label>
+                  <select
+                    value={parentId}
+                    onChange={(e) => setParentId(e.target.value)}
+                    className="w-full bg-zinc-500/5 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-350 outline-none focus:border-zinc-400 dark:focus:border-zinc-700 cursor-pointer"
+                  >
+                    <option value="">{t('project.noParent')}</option>
+                    {tasks
+                      .filter((t) => t.type === 'group')
+                      .map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.title}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">{t('project.taskTitle')}</label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                  {taskType === 'group' ? '그룹명' : t('project.taskTitle')}
+                </label>
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder={t('project.taskTitlePlaceholder')}
+                  placeholder={taskType === 'group' ? '예) 게시판 그룹, 관리자 웹' : t('project.taskTitlePlaceholder')}
                   className="w-full bg-zinc-500/5 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-150 outline-none focus:border-zinc-400 dark:focus:border-zinc-700 placeholder-zinc-400"
                   required
                 />
@@ -188,41 +228,49 @@ export default function ProjectManagementView() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">{t('project.startDate')}</label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full bg-zinc-500/5 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-700 cursor-pointer"
-                    required
-                  />
+              {taskType === 'group' ? (
+                <div className="bg-blue-500/[0.03] border border-blue-500/10 rounded-lg p-3 text-[11px] text-blue-600 dark:text-blue-400 leading-relaxed font-sans">
+                  💡 <strong>그룹</strong>의 날짜와 진척도는 하위 작업들이 등록되면 자동으로 집계 및 합산됩니다.
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">{t('project.endDate')}</label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full bg-zinc-500/5 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-700 cursor-pointer"
-                    required
-                  />
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">{t('project.startDate')}</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full bg-zinc-500/5 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-700 cursor-pointer"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">{t('project.endDate')}</label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-full bg-zinc-500/5 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-200 outline-none focus:border-zinc-400 dark:focus:border-zinc-700 cursor-pointer"
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">{t('calendar.eventType')}</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                  className="w-full bg-zinc-500/5 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-350 outline-none focus:border-zinc-400 dark:focus:border-zinc-700 cursor-pointer"
-                >
-                  <option value="todo">{t('project.todo')}</option>
-                  <option value="in_progress">{t('project.inProgress')}</option>
-                  <option value="done">{t('project.done')}</option>
-                </select>
-              </div>
+              {taskType === 'task' && (
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">{t('calendar.eventType')}</label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                    className="w-full bg-zinc-500/5 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-350 outline-none focus:border-zinc-400 dark:focus:border-zinc-700 cursor-pointer"
+                  >
+                    <option value="todo">{t('project.todo')}</option>
+                    <option value="in_progress">{t('project.inProgress')}</option>
+                    <option value="done">{t('project.done')}</option>
+                  </select>
+                </div>
+              )}
 
               {errorMsg && (
                 <p className="text-xs text-red-500 font-medium">{errorMsg}</p>

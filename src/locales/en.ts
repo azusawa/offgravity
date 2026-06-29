@@ -127,6 +127,12 @@ export const en = {
     confirmDelete: "Are you sure you want to delete this task?",
     editTask: "Edit Task",
     errorAdd: "Start date cannot be later than due date.",
-    dateDiffError: "Invalid date inputs."
+    dateDiffError: "Invalid date inputs.",
+    taskType: "Type",
+    typeTask: "Task",
+    typeGroup: "Group",
+    parentGroup: "Parent Group",
+    noParent: "None (Root)",
+    addGroup: "Add Group"
   }
 };

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ProjectTask, TaskStatus } from '@/domain/entities/ProjectTask';
+import { ProjectTask, TaskStatus, TaskType } from '@/domain/entities/ProjectTask';
 import { LocalStorageProjectTaskRepository } from '@/data/repositories/LocalStorageProjectTaskRepository';
+import { ProjectTaskTreeService } from '@/domain/services/ProjectTaskTreeService';
 
 const repository = new LocalStorageProjectTaskRepository();
 
@@ -12,17 +13,20 @@ const repository = new LocalStorageProjectTaskRepository();
  * [역할]
  * UI 컴포넌트가 직접 저장소에 접근하는 것을 막고 Repository를 통해 데이터를 조작하며,
  * React 상태 갱신 및 비즈니스 예외(Validation) 전파를 제어합니다.
+ * 추가적으로, 계층형 트리 정렬과 날짜/진척도 자동 집계를 연결합니다.
  */
 export function useProjectTasks() {
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // 1. 전체 태스크 로드 함수
+  // 1. 전체 태스크 로드 함수 (트리 집계 연산 및 Pre-order 1차원 전개 동기화)
   const fetchTasks = async () => {
     try {
       const data = await repository.getAll();
-      setTasks(data);
+      const tree = ProjectTaskTreeService.buildTree(data);
+      const calculatedFlatTasks = ProjectTaskTreeService.flattenTree(tree);
+      setTasks(calculatedFlatTasks);
     } catch (error) {
       console.error('프로젝트 태스크 조회 실패:', error);
     }
@@ -47,6 +51,8 @@ export function useProjectTasks() {
     startDate: string;
     endDate: string;
     progress?: number;
+    type?: TaskType;
+    parentId?: string | null;
   }) => {
     try {
       const randomId = typeof window !== 'undefined' && window.crypto?.randomUUID 
@@ -62,10 +68,12 @@ export function useProjectTasks() {
         startDate: params.startDate,
         endDate: params.endDate,
         progress: params.progress ?? 0,
+        type: params.type ?? 'task',
+        parentId: params.parentId ?? null,
       });
 
       await repository.save(newTask);
-      await fetchTasks(); // 상태 갱신
+      await fetchTasks(); // 상태 갱신 (트리 계산 및 정렬 반영)
     } catch (error) {
       throw error;
     }

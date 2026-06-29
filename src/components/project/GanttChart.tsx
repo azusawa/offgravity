@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { ProjectTask } from '@/domain/entities/ProjectTask';
 import { useTranslation } from '@/hooks/useTranslation';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Folder, FolderOpen, FileText, ChevronDown as ChevronDownIcon, ChevronRight as ChevronRightIcon } from 'lucide-react';
 
 interface GanttChartProps {
   tasks: ProjectTask[];
@@ -26,6 +26,9 @@ export default function GanttChart({
 }: GanttChartProps) {
   const { t } = useTranslation();
 
+  // 그룹 접기/펼치기 상태 관리 (key: groupId, value: collapsed여부)
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
   // 드래그 중 실시간 재배치 순서를 보관할 임시 상태 (순서 이동용)
   const [tempTasks, setTempTasks] = useState<ProjectTask[] | null>(null);
 
@@ -34,6 +37,36 @@ export default function GanttChart({
 
   // 최종 렌더링과 위치 계산에 이용할 태스크 배열
   const displayTasks = tempTasks || tasks;
+
+  // 특정 노드의 트리 상의 깊이(depth) 계산 헬퍼
+  const getDepth = (task: ProjectTask, allTasks: ProjectTask[]): number => {
+    let depth = 0;
+    let current = task;
+    while (current.parentId) {
+      const parent = allTasks.find(t => t.id === current.parentId);
+      if (!parent) break;
+      depth++;
+      current = parent;
+    }
+    return depth;
+  };
+
+  // 특정 노드가 접힌 그룹 내에 있는지 판단하여 렌더링 제외를 돕는 헬퍼
+  const isCollapsed = (task: ProjectTask): boolean => {
+    let current = task;
+    while (current.parentId) {
+      if (collapsedGroups[current.parentId]) {
+        return true;
+      }
+      const parent = displayTasks.find(t => t.id === current.parentId);
+      if (!parent) break;
+      current = parent;
+    }
+    return false;
+  };
+
+  // 접힌 자식을 제외한 화면 표시용 리스트
+  const visibleTasks = displayTasks.filter(t => !isCollapsed(t));
 
   // FLIP 애니메이션용: 드롭 직전 아이템들의 뷰포트 Y축 위치 보관
   const prevPositionsRef = useRef<Record<string, number>>({});
@@ -44,7 +77,7 @@ export default function GanttChart({
   // 모든 좌측 리스트 아이템들의 현재 Y 위치를 캡처하여 저장
   const recordPositions = () => {
     const positions: Record<string, number> = {};
-    displayTasks.forEach((task) => {
+    visibleTasks.forEach((task) => {
       const el = document.querySelector(`[data-list-id="${task.id}"]`);
       if (el) {
         positions[task.id] = el.getBoundingClientRect().top;
@@ -57,7 +90,7 @@ export default function GanttChart({
   useLayoutEffect(() => {
     if (Object.keys(prevPositionsRef.current).length === 0) return;
 
-    displayTasks.forEach((task) => {
+    visibleTasks.forEach((task) => {
       if (task.id === draggedTaskId) return;
 
       const el = document.querySelector(`[data-list-id="${task.id}"]`) as HTMLElement;
@@ -86,7 +119,7 @@ export default function GanttChart({
     });
 
     prevPositionsRef.current = {};
-  }, [displayTasks, draggedTaskId]);
+  }, [visibleTasks, draggedTaskId]);
 
   // Plain Object와 도메인 인스턴스 양측 모두 무결하게 호환 가능한 복제 헬퍼
   const cloneTask = (t: ProjectTask): ProjectTask => {
@@ -102,6 +135,8 @@ export default function GanttChart({
       endDate: t.endDate,
       progress: t.progress,
       createdAt: t.createdAt,
+      type: t.type,
+      parentId: t.parentId,
     });
   };
 
@@ -150,43 +185,59 @@ export default function GanttChart({
     };
   }, [draggedTaskId]);
 
+  // 이동 범위 제한 규칙: 동일 그룹(parentId가 같은 형제들) 내에서만 순서 이동 가능
   const handleListDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     if (!draggedTaskId || !tempTasks) return;
 
-    // 좌측 리스트 내 다른 정적 아이템들 조회
-    const staticElements = Array.from(
-      document.querySelectorAll(`[data-list-status="static"]:not([data-list-id="${draggedTaskId}"])`)
+    const draggedTask = tempTasks.find((t) => t.id === draggedTaskId);
+    if (!draggedTask) return;
+    const targetParentId = draggedTask.parentId; // 드래그 대상의 부모 ID
+
+    // 동일 parentId를 가진 형제 노드 엘리먼트들만 조회 (정적 노드들)
+    const siblingElements = Array.from(
+      document.querySelectorAll(
+        `[data-list-status="static"][data-parent-id="${targetParentId ?? 'root'}"]:not([data-list-id="${draggedTaskId}"])`
+      )
     ) as HTMLElement[];
 
     const mouseY = e.clientY;
-    let insertIndex = staticElements.length; // 기본값: 맨 뒤
+    let insertIndexInSiblings = siblingElements.length; // 형제 노드들 사이에서의 위치
 
-    for (let i = 0; i < staticElements.length; i++) {
-      const el = staticElements[i];
+    for (let i = 0; i < siblingElements.length; i++) {
+      const el = siblingElements[i];
       const rect = el.getBoundingClientRect();
       const centerY = rect.top + rect.height / 2;
 
       if (mouseY < centerY) {
-        insertIndex = i;
+        insertIndexInSiblings = i;
         break;
       }
     }
 
-    // 드래그 대상을 제외한 정적 리스트
-    const currentTemp = tempTasks.filter((t) => t.id !== draggedTaskId);
+    // 형제들의 ID 목록
+    const siblingIds = siblingElements.map((el) => el.getAttribute('data-list-id')!);
+    
+    // 형제 리스트 내 적절한 위치에 드래그 노드 ID 삽입
+    siblingIds.splice(insertIndexInSiblings, 0, draggedTaskId);
 
-    // 타겟 위치에 드래그 카드를 삽입
-    const draggedTask = tempTasks.find((t) => t.id === draggedTaskId);
-    if (!draggedTask) return;
+    // 전체 tempTasks 에서 해당 형제들의 글로벌 인덱스를 가져와 siblingIds 순서에 맞게 스왑 적용
+    const newTempTasks = tempTasks.map(t => cloneTask(t));
+    const siblingIndicesInGlobal = siblingIds.map((id) =>
+      tempTasks.findIndex((t) => t.id === id)
+    );
+    const sortedGlobalIndices = [...siblingIndicesInGlobal].sort((a, b) => a - b);
 
-    const testTasks = [...currentTemp];
-    testTasks.splice(insertIndex, 0, draggedTask);
+    siblingIds.forEach((id, idx) => {
+      const targetGlobalIdx = sortedGlobalIndices[idx];
+      const taskInstance = tempTasks.find((t) => t.id === id)!;
+      newTempTasks[targetGlobalIdx] = cloneTask(taskInstance);
+    });
 
-    const isSameOrder = tempTasks.every((t, idx) => t.id === testTasks[idx]?.id);
+    const isSameOrder = tempTasks.every((t, idx) => t.id === newTempTasks[idx]?.id);
     if (!isSameOrder) {
       recordPositions(); // FLIP 위치 기록
-      setTempTasks(testTasks);
+      setTempTasks(newTempTasks);
     }
   };
 
@@ -395,26 +446,42 @@ export default function GanttChart({
               onDrop={handleListDrop}
               className="divide-y divide-zinc-500/5"
             >
-              {displayTasks.length === 0 ? (
+              {visibleTasks.length === 0 ? (
                 <div className="py-20 text-center text-xs text-zinc-455">
                   {t('target.noGoals')}
                 </div>
               ) : (
-                displayTasks.map((task) => {
+                visibleTasks.map((task) => {
                   const isDraggingThis = task.id === draggedTaskId;
+                  const depth = getDepth(task, displayTasks);
+                  
+                  const isGroup = task.type === 'group';
+                  const isCollapsedSelf = collapsedGroups[task.id];
 
                   const itemStyle = {
                     transition: 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    paddingLeft: `${depth * 16 + 8}px`,
                   };
 
                   const itemClassName = isDraggingThis
                     ? "h-[52px] rounded-lg border border-dashed border-blue-500/35 bg-blue-500/[0.015] my-2 transition-all duration-200 cursor-grab opacity-50"
-                    : "h-[52px] flex flex-col justify-center py-2 text-xs cursor-grab active:cursor-grabbing hover:bg-zinc-500/5 px-2 rounded-lg transition-transform";
+                    : `h-[52px] flex items-center justify-between py-2 text-xs cursor-grab active:cursor-grabbing hover:bg-zinc-500/5 rounded-lg transition-transform ${
+                        isGroup ? 'font-semibold text-zinc-900 dark:text-zinc-105 font-sans' : 'text-zinc-700 dark:text-zinc-300'
+                      }`;
+
+                  const toggleGroupFold = (e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    setCollapsedGroups((prev) => ({
+                      ...prev,
+                      [task.id]: !prev[task.id],
+                    }));
+                  };
 
                   return (
                     <div
                       key={task.id}
                       data-list-id={task.id}
+                      data-parent-id={task.parentId ?? "root"}
                       data-list-status={isDraggingThis ? "placeholder" : "static"}
                       draggable
                       style={itemStyle}
@@ -423,15 +490,43 @@ export default function GanttChart({
                       className={itemClassName}
                     >
                       {!isDraggingThis && (
-                        <>
-                          <div className="font-semibold text-zinc-700 dark:text-zinc-200 truncate mb-1">
-                            {task.title}
+                        <div className="flex items-center gap-1.5 w-full overflow-hidden pr-2">
+                          {isGroup ? (
+                            <button
+                              type="button"
+                              onClick={toggleGroupFold}
+                              className="p-0.5 rounded hover:bg-zinc-500/10 text-zinc-400 dark:text-zinc-500 cursor-pointer flex items-center justify-center flex-shrink-0"
+                            >
+                              {isCollapsedSelf ? (
+                                <ChevronRightIcon className="w-3.5 h-3.5" />
+                              ) : (
+                                <ChevronDownIcon className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          ) : (
+                            <div className="w-4.5 flex-shrink-0" />
+                          )}
+
+                          {isGroup ? (
+                            isCollapsedSelf ? (
+                              <Folder className="w-4 h-4 text-amber-500 dark:text-amber-600 flex-shrink-0" />
+                            ) : (
+                              <FolderOpen className="w-4 h-4 text-amber-500 dark:text-amber-600 flex-shrink-0" />
+                            )
+                          ) : (
+                            <FileText className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 flex-shrink-0" />
+                          )}
+
+                          <div className="flex-1 min-w-0 flex flex-col justify-center">
+                            <div className="truncate mb-0.5">
+                              {task.title}
+                            </div>
+                            <div className="flex items-center justify-between text-[9px] text-zinc-400 dark:text-zinc-500 font-mono">
+                              <span>{task.startDate} ~ {task.endDate}</span>
+                              <span>{task.progress}%</span>
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between text-[9px] text-zinc-400 dark:text-zinc-500 font-mono">
-                            <span>{task.startDate} ~ {task.endDate}</span>
-                            <span>{task.progress}%</span>
-                          </div>
-                        </>
+                        </div>
                       )}
                     </div>
                   );
@@ -442,20 +537,15 @@ export default function GanttChart({
 
           {/* B. 우측 영역: 그리드 캘린더 및 바 시각화 */}
           <div className="flex-1 flex flex-col relative overflow-hidden">
-            
-            {/* 캘린더 날짜/요일 헤더 */}
             <div className="h-14 flex border-b border-zinc-500/10">
               {timelineDates.map((date, idx) => {
                 const isToday = formatDate(date) === formatDate(new Date());
                 const dayName = t('calendar.days')[date.getDay()];
-                
                 return (
                   <div
                     key={idx}
                     className={`w-9 flex-shrink-0 flex flex-col items-center justify-center text-[10px] border-r border-zinc-500/5 font-mono ${
-                      isToday
-                        ? 'bg-blue-500/5 text-blue-500 font-extrabold'
-                        : 'text-zinc-450 dark:text-zinc-500'
+                      isToday ? 'bg-blue-500/5 text-blue-500 font-extrabold' : 'text-zinc-450 dark:text-zinc-500'
                     }`}
                   >
                     <span>{date.getDate()}</span>
@@ -465,14 +555,13 @@ export default function GanttChart({
               })}
             </div>
 
-            {/* 타임라인 간트 바 매핑 영역 */}
             <div className="relative divide-y divide-zinc-500/5">
-              {displayTasks.length === 0 ? (
+              {visibleTasks.length === 0 ? (
                 <div className="h-[120px] flex items-center justify-center text-xs text-zinc-400">
                   {t('project.noTasks')}
                 </div>
               ) : (
-                displayTasks.map((task) => {
+                visibleTasks.map((task) => {
                   if (task.id === draggedTaskId) {
                     return (
                       <div
@@ -484,8 +573,8 @@ export default function GanttChart({
                   const taskStart = parseDate(task.startDate);
                   const taskEnd = parseDate(task.endDate);
                   
-                  // 마우스 드래그 변위 적용
-                  const isCurrentDragging = dragState?.taskId === task.id;
+                  const isGroup = task.type === 'group';
+                  const isCurrentDragging = !isGroup && dragState?.taskId === task.id;
                   const offset = isCurrentDragging ? dragState.lastDaysOffset : 0;
                   
                   let displayStart = taskStart;
@@ -501,27 +590,43 @@ export default function GanttChart({
                     }
                   }
 
-                  // 21일 타임라인 그리드 내 위치 계산
                   const startDiff = getDiffDays(displayStart, gridStartDate);
                   const endDiff = getDiffDays(displayEnd, gridStartDate);
 
-                  // 그리드 뷰포트 마스킹 (범위 초과 시 픽셀 계산 클리핑)
                   const leftIndex = Math.max(0, startDiff);
                   const rightIndex = Math.min(totalDays - 1, endDiff);
 
-                  // 화면에 일부라도 걸치는지 검사
                   const isVisible = leftIndex <= rightIndex && endDiff >= 0 && startDiff < totalDays;
 
-                  // 픽셀 값 환산
                   const leftPixel = leftIndex * cellWidth;
                   const widthPixel = isVisible ? (rightIndex - leftIndex + 1) * cellWidth : 0;
+
+                  const getBarColorClass = (progress: number, type: 'task' | 'group') => {
+                    if (type === 'group') {
+                      return 'bg-zinc-800 dark:bg-zinc-200 border-zinc-700 dark:border-zinc-300 text-zinc-150 dark:text-zinc-900 shadow';
+                    }
+                    if (progress === 100) {
+                      return 'bg-emerald-500 dark:bg-emerald-500/80 border-emerald-600/35 text-white dark:text-zinc-100';
+                    }
+                    return 'bg-blue-500 dark:bg-blue-500/80 border-blue-600/35 text-white dark:text-zinc-100';
+                  };
+
+                  const barStyle = isGroup
+                    ? {
+                        left: `${leftPixel}px`,
+                        width: `${widthPixel}px`,
+                        clipPath: 'polygon(0% 0%, 100% 0%, 100% 100%, calc(100% - 6px) 100%, calc(100% - 6px) 60%, 6px 60%, 6px 100%, 0% 100%)',
+                      }
+                    : {
+                        left: `${leftPixel}px`,
+                        width: `${widthPixel}px`,
+                      };
 
                   return (
                     <div
                       key={task.id}
                       className="h-[52px] w-full flex items-center relative overflow-hidden bg-zinc-500/[0.01]"
                     >
-                      {/* 뒷배경 세로 격자선 */}
                       <div className="absolute inset-0 flex pointer-events-none">
                         {timelineDates.map((date, idx) => (
                           <div
@@ -535,18 +640,16 @@ export default function GanttChart({
                         ))}
                       </div>
 
-                      {/* 드래그 조작형 간트 바 (Gantt Bar) */}
                       {isVisible && (
                         <div
-                          style={{
-                            left: `${leftPixel}px`,
-                            width: `${widthPixel}px`,
-                          }}
-                          className={`absolute h-7 rounded-md border flex items-center justify-between px-2 text-[10px] font-semibold tracking-tight shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform duration-150 ${getBarColorClass(
-                            task.progress
-                          )}`}
-                          onMouseDown={(e) =>
-                            handleDragStart(e, task.id, 'move', task.startDate, task.endDate)
+                          style={barStyle}
+                          className={`absolute h-7 rounded-md border flex items-center justify-between px-2 text-[10px] font-semibold tracking-tight shadow-sm hover:scale-[1.01] transition-transform duration-150 ${
+                            isGroup ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+                          } ${getBarColorClass(task.progress, task.type)}`}
+                          onMouseDown={
+                            isGroup
+                              ? undefined
+                              : (e) => handleDragStart(e, task.id, 'move', task.startDate, task.endDate)
                           }
                           title={`${task.title} (${task.progress}%)`}
                         >
@@ -554,15 +657,17 @@ export default function GanttChart({
                             {task.title}
                           </span>
 
-                          {/* 마감일 드래그 조절기 (Resize Handler) */}
-                          <div
-                            onMouseDown={(e) => {
-                              e.stopPropagation(); // move 드래그 상속 방지
-                              handleDragStart(e, task.id, 'resize', task.startDate, task.endDate);
-                            }}
-                            className="w-1.5 h-4 bg-white/40 dark:bg-zinc-900/50 rounded-full cursor-col-resize hover:bg-white/75 active:bg-white flex-shrink-0"
-                            title="마감일 드래그 변경"
-                          />
+                          {/* 마감일 드래그 조절기 (Resize Handler) - 그룹 노드는 배제 */}
+                          {!isGroup && (
+                            <div
+                              onMouseDown={(e) => {
+                                e.stopPropagation(); // move 드래그 상속 방지
+                                handleDragStart(e, task.id, 'resize', task.startDate, task.endDate);
+                              }}
+                              className="w-1.5 h-4 bg-white/40 dark:bg-zinc-900/50 rounded-full cursor-col-resize hover:bg-white/75 active:bg-white flex-shrink-0"
+                              title="마감일 드래그 변경"
+                            />
+                          )}
                         </div>
                       )}
                     </div>
@@ -571,7 +676,6 @@ export default function GanttChart({
               )}
             </div>
           </div>
-
         </div>
       </div>
     </div>

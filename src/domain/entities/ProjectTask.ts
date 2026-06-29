@@ -1,11 +1,13 @@
 export type TaskStatus = 'todo' | 'in_progress' | 'done';
+export type TaskType = 'task' | 'group';
 
 /**
  * Life OS Dashboard - ProjectTask 도메인 엔티티
  * 
  * [설명]
- * 프로젝트 관리 모듈에서 사용되는 개별 태스크(일감)의 순수 비즈니스 엔티티입니다.
- * 칸반 보드의 '상태(Status)'와 간트 차트의 '진척도(Progress)'가 유기적으로 동기화되는 규칙을 내장합니다.
+ * 프로젝트 관리 모듈에서 사용되는 개별 태스크(일감) 및 그룹의 순수 비즈니스 엔티티입니다.
+ * 칸반 보드의 '상태(Status)'와 간트 차트의 '진척도(Progress)'가 유기적으로 동기화되는 규칙을 내장하며,
+ * 계층 구조(그룹) 설계를 위해 parentId와 type을 가집니다.
  */
 export class ProjectTask {
   public id: string;
@@ -16,6 +18,9 @@ export class ProjectTask {
   public endDate: string;   // YYYY-MM-DD
   public progress: number;  // 0 ~ 100
   public createdAt: string;
+  public type: TaskType;
+  public parentId: string | null;
+  public children?: ProjectTask[]; // 런타임 트리용 자식 리스트
 
   constructor(params: {
     id: string;
@@ -26,6 +31,8 @@ export class ProjectTask {
     endDate: string;
     progress?: number;
     createdAt?: string;
+    type?: TaskType;
+    parentId?: string | null;
   }) {
     // 1. 필수 유효성 검사 (시작일이 종료일보다 늦을 수 없음)
     if (!params.title || params.title.trim() === '') {
@@ -49,6 +56,8 @@ export class ProjectTask {
     this.startDate = params.startDate;
     this.endDate = params.endDate;
     this.createdAt = params.createdAt ?? new Date().toISOString();
+    this.type = params.type ?? 'task';
+    this.parentId = params.parentId ?? null;
 
     // 2. 상태(status)와 진척도(progress)의 동기화 초기화
     let initialStatus = params.status ?? 'todo';
@@ -129,10 +138,55 @@ export class ProjectTask {
   }
 
   /**
+   * 하위 자식들의 상태를 기반으로 그룹 속성을 자동 집계하는 비즈니스 메서드
+   */
+  public aggregateFromChildren(children: ProjectTask[]): void {
+    if (this.type !== 'group') return;
+    this.children = children;
+    if (children.length === 0) return;
+
+    // 1. 날짜 범위 집계: 자식들의 최소 startDate와 최대 endDate 찾기
+    let minDate = children[0].startDate;
+    let maxDate = children[0].endDate;
+
+    for (let i = 1; i < children.length; i++) {
+      const child = children[i];
+      if (new Date(child.startDate) < new Date(minDate)) {
+        minDate = child.startDate;
+      }
+      if (new Date(child.endDate) > new Date(maxDate)) {
+        maxDate = child.endDate;
+      }
+    }
+    this.startDate = minDate;
+    this.endDate = maxDate;
+
+    // 2. 진척도 집계: 자식들의 progress 산술 평균
+    const totalProgress = children.reduce((sum, child) => sum + child.progress, 0);
+    this.progress = Math.round(totalProgress / children.length);
+
+    // 3. 상태 집계:
+    // - 모든 자식이 done 이면 -> done
+    // - 모든 자식이 todo 이면 -> todo
+    // - 그 외 -> in_progress
+    const statuses = children.map((c) => c.status);
+    const allDone = statuses.every((s) => s === 'done');
+    const allTodo = statuses.every((s) => s === 'todo');
+
+    if (allDone) {
+      this.status = 'done';
+    } else if (allTodo) {
+      this.status = 'todo';
+    } else {
+      this.status = 'in_progress';
+    }
+  }
+
+  /**
    * 엔티티 복제 메서드
    */
   public clone(): ProjectTask {
-    return new ProjectTask({
+    const cloned = new ProjectTask({
       id: this.id,
       title: this.title,
       description: this.description,
@@ -141,6 +195,12 @@ export class ProjectTask {
       endDate: this.endDate,
       progress: this.progress,
       createdAt: this.createdAt,
+      type: this.type,
+      parentId: this.parentId,
     });
+    if (this.children) {
+      cloned.children = this.children.map(c => c.clone());
+    }
+    return cloned;
   }
 }

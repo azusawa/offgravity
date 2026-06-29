@@ -316,7 +316,7 @@ export default function KanbanBoard({
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 select-none font-sans">
       {columns.map((col) => {
-        const colTasks = displayTasks.filter((t) => t.status === col.status);
+        const colTasks = displayTasks.filter((t) => t.status === col.status && t.type === 'task');
         const isOver = dragOverCol[col.status];
 
         return (
@@ -417,7 +417,21 @@ export default function KanbanBoard({
                             )}
                           </div>
 
-                          <div className="space-y-2 border-t border-zinc-500/10 pt-2.5">
+                           <div className="space-y-2 border-t border-zinc-500/10 pt-2.5">
+                            {/* 소속 부모 그룹 표시 */}
+                            {task.parentId && (
+                              <div className="flex items-center mb-1">
+                                {(() => {
+                                  const parentGroup = displayTasks.find(t => t.id === task.parentId);
+                                  return parentGroup ? (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-550/10 text-zinc-450 dark:text-zinc-400 font-medium flex items-center gap-1">
+                                      📁 {parentGroup.title}
+                                    </span>
+                                  ) : null;
+                                })()}
+                              </div>
+                            )}
+
                             {/* 기간 표시 */}
                             <div className="flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-400 font-mono">
                               <Calendar className="w-3 h-3 text-zinc-500" />

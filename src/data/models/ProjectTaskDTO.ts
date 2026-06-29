@@ -17,6 +17,8 @@ export interface ProjectTaskDTO {
   endDate: string;
   progress: number;
   createdAt: string;
+  type: string; // 'task' | 'group'
+  parentId: string | null;
 }
 
 export class ProjectTaskMapper {
@@ -33,6 +35,8 @@ export class ProjectTaskMapper {
       endDate: dto.endDate,
       progress: dto.progress,
       createdAt: dto.createdAt,
+      type: dto.type as any, // 'task' | 'group' 안전 컴파일 캐스팅
+      parentId: dto.parentId,
     });
   }
 
@@ -49,6 +53,8 @@ export class ProjectTaskMapper {
       endDate: domain.endDate,
       progress: domain.progress,
       createdAt: domain.createdAt,
+      type: domain.type,
+      parentId: domain.parentId,
     };
   }
 }
