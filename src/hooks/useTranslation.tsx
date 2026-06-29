@@ -13,7 +13,7 @@ const LOCALE_STORAGE_KEY = 'life-os-locale';
 interface TranslationContextType {
   locale: Locale;
   changeLocale: (nextLocale: Locale) => void;
-  t: (keyPath: string, replacements?: Record<string, string | number>) => string;
+  t: (keyPath: string, replacements?: Record<string, string | number>) => any;
 }
 
 const TranslationContext = createContext<TranslationContextType | undefined>(undefined);
@@ -58,7 +58,7 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const t = useCallback(
-    (keyPath: string, replacements?: Record<string, string | number>): string => {
+    (keyPath: string, replacements?: Record<string, string | number>): any => {
       const keys = keyPath.split('.');
       let currentObj: unknown = dictionaries[locale];
 
@@ -70,11 +70,15 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
         }
       }
 
-      if (typeof currentObj !== 'string') {
+      if (typeof currentObj !== 'string' && !Array.isArray(currentObj)) {
         return keyPath;
       }
 
-      let text = currentObj;
+      if (Array.isArray(currentObj)) {
+        return currentObj;
+      }
+
+      let text = currentObj as string;
       if (replacements) {
         Object.entries(replacements).forEach(([k, v]) => {
           text = text.replace(new RegExp(`{${k}}`, 'g'), String(v));

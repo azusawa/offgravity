@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { ProjectTask } from '@/domain/entities/ProjectTask';
 import { useTranslation } from '@/hooks/useTranslation';
 import { ChevronLeft, ChevronRight, Folder, FolderOpen, FileText, ChevronDown as ChevronDownIcon, ChevronRight as ChevronRightIcon } from 'lucide-react';
+import { useHolidaySettings } from '@/hooks/useHolidaySettings';
+import { HolidayProvider } from '@/domain/services/HolidayProvider';
 
 interface GanttChartProps {
   tasks: ProjectTask[];
@@ -289,6 +291,75 @@ export default function GanttChart({
     timelineDates.push(addDays(gridStartDate, i));
   }
 
+  // 공휴일 설정 정보 구독 및 해당 기간 공휴일 데이터 취합
+  const holidaySettings = useHolidaySettings();
+  const activeCountries: ('KR' | 'JP' | 'US')[] = [];
+  if (holidaySettings.showKR) activeCountries.push('KR');
+  if (holidaySettings.showJP) activeCountries.push('JP');
+  if (holidaySettings.showUS) activeCountries.push('US');
+
+  const [holidays, setHolidays] = useState<string[]>([]);
+
+  // 21일간의 그리드 날짜 배열 생성 유틸을 바탕으로 범위 내 공휴일 추출
+  // timelineDates의 범위(시작년월~종료년월)를 감지
+  useEffect(() => {
+    if (timelineDates.length === 0 || activeCountries.length === 0) {
+      setHolidays([]);
+      return;
+    }
+    const startYear = timelineDates[0].getFullYear();
+    const startMonth = timelineDates[0].getMonth();
+    const endYear = timelineDates[timelineDates.length - 1].getFullYear();
+    const endMonth = timelineDates[timelineDates.length - 1].getMonth();
+
+    const holidayDatesSet = new Set<string>();
+    const h1 = HolidayProvider.getHolidays(startYear, startMonth, activeCountries);
+    h1.forEach(h => holidayDatesSet.add(h.date));
+
+    if (startYear !== endYear || startMonth !== endMonth) {
+      const h2 = HolidayProvider.getHolidays(endYear, endMonth, activeCountries);
+      h2.forEach(h => holidayDatesSet.add(h.date));
+    }
+    setHolidays(Array.from(holidayDatesSet));
+  }, [baseDate, holidaySettings.showKR, holidaySettings.showJP, holidaySettings.showUS]);
+
+  const isHoliday = (date: Date): boolean => {
+    const formatted = formatDate(date);
+    return holidays.includes(formatted);
+  };
+
+  // 날짜 그리드 헤더용 요일 및 주말/공휴일 스타일 계산기
+  const getHeaderDayColorClass = (date: Date) => {
+    const isToday = formatDate(date) === formatDate(new Date());
+    if (isToday) {
+      return 'bg-blue-500/5 text-blue-500 font-extrabold';
+    }
+    const day = date.getDay();
+    if (day === 0 || isHoliday(date)) {
+      return 'text-red-500 dark:text-red-400 font-semibold bg-red-500/[0.02] dark:bg-red-500/[0.03]';
+    }
+    if (day === 6) {
+      return 'text-blue-500 dark:text-blue-400 font-semibold bg-blue-500/[0.02] dark:bg-blue-500/[0.03]';
+    }
+    return 'text-zinc-450 dark:text-zinc-500';
+  };
+
+  // 격자 배경 세로선용 주말/공휴일 스타일 계산기
+  const getGridBgClass = (date: Date) => {
+    const isToday = formatDate(date) === formatDate(new Date());
+    if (isToday) {
+      return 'bg-blue-500/[0.015]';
+    }
+    const day = date.getDay();
+    if (day === 0 || isHoliday(date)) {
+      return 'bg-red-500/[0.015] dark:bg-red-500/[0.025]';
+    }
+    if (day === 6) {
+      return 'bg-blue-500/[0.01] dark:bg-blue-500/[0.015]';
+    }
+    return '';
+  };
+
   // 타임라인 네비게이션 액션
   const goPrev = () => setBaseDate(prev => addDays(prev, -7));
   const goNext = () => setBaseDate(prev => addDays(prev, 7));
@@ -539,14 +610,11 @@ export default function GanttChart({
           <div className="flex-1 flex flex-col relative overflow-hidden">
             <div className="h-14 flex border-b border-zinc-500/10">
               {timelineDates.map((date, idx) => {
-                const isToday = formatDate(date) === formatDate(new Date());
                 const dayName = t('calendar.days')[date.getDay()];
                 return (
                   <div
                     key={idx}
-                    className={`w-9 flex-shrink-0 flex flex-col items-center justify-center text-[10px] border-r border-zinc-500/5 font-mono ${
-                      isToday ? 'bg-blue-500/5 text-blue-500 font-extrabold' : 'text-zinc-450 dark:text-zinc-500'
-                    }`}
+                    className={`w-9 flex-shrink-0 flex flex-col items-center justify-center text-[10px] border-r border-zinc-500/5 font-mono ${getHeaderDayColorClass(date)}`}
                   >
                     <span>{date.getDate()}</span>
                     <span className="text-[8px] opacity-75">{dayName}</span>
@@ -631,11 +699,7 @@ export default function GanttChart({
                         {timelineDates.map((date, idx) => (
                           <div
                             key={idx}
-                            className={`w-9 h-full border-r border-zinc-500/[0.03] flex-shrink-0 ${
-                              formatDate(date) === formatDate(new Date())
-                                ? 'bg-blue-500/[0.015]'
-                                : ''
-                            }`}
+                            className={`w-9 h-full border-r border-zinc-500/[0.03] flex-shrink-0 ${getGridBgClass(date)}`}
                           />
                         ))}
                       </div>
