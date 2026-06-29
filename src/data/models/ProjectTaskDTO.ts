@@ -1,4 +1,4 @@
-import { ProjectTask, TaskStatus } from '@/domain/entities/ProjectTask';
+import { ProjectTask, TaskStatus, TaskType } from '@/domain/entities/ProjectTask';
 
 /**
  * Life OS Dashboard - ProjectTask 데이터 전송 객체 (DTO) 및 매퍼
@@ -18,6 +18,7 @@ export interface ProjectTaskDTO {
   progress: number;
   createdAt: string;
   type: string; // 'task' | 'group'
+  isGroup?: boolean;
   parentId: string | null;
 }
 
@@ -35,7 +36,8 @@ export class ProjectTaskMapper {
       endDate: dto.endDate,
       progress: dto.progress,
       createdAt: dto.createdAt,
-      type: dto.type as any, // 'task' | 'group' 안전 컴파일 캐스팅
+      type: dto.type as TaskType, // 안전 컴파일 캐스팅
+      isGroup: dto.isGroup,
       parentId: dto.parentId,
     });
   }
@@ -54,6 +56,7 @@ export class ProjectTaskMapper {
       progress: domain.progress,
       createdAt: domain.createdAt,
       type: domain.type,
+      isGroup: domain.type === 'group',
       parentId: domain.parentId,
     };
   }

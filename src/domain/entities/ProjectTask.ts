@@ -27,22 +27,27 @@ export class ProjectTask {
     title: string;
     description?: string;
     status?: TaskStatus;
-    startDate: string;
-    endDate: string;
+    startDate?: string;
+    endDate?: string;
     progress?: number;
     createdAt?: string;
     type?: TaskType;
+    isGroup?: boolean;
     parentId?: string | null;
   }) {
-    // 1. 필수 유효성 검사 (시작일이 종료일보다 늦을 수 없음)
+    const isGroupType = (params.type ?? 'task') === 'group' || params.isGroup === true;
+
+    // 1. 필수 유효성 검사 (시작일이 종료일보다 늦을 수 없음 - 일반 태스크에만 적용)
     if (!params.title || params.title.trim() === '') {
       throw new Error('작업의 제목은 빈 칸일 수 없습니다.');
     }
-    if (!params.startDate || !params.endDate) {
-      throw new Error('시작일과 종료일은 필수 입력 사항입니다.');
-    }
-    if (new Date(params.startDate) > new Date(params.endDate)) {
-      throw new Error('시작일은 종료일보다 늦을 수 없습니다.');
+    if (!isGroupType) {
+      if (!params.startDate || !params.endDate) {
+        throw new Error('시작일과 종료일은 필수 입력 사항입니다.');
+      }
+      if (new Date(params.startDate) > new Date(params.endDate)) {
+        throw new Error('시작일은 종료일보다 늦을 수 없습니다.');
+      }
     }
 
     const progressVal = params.progress ?? 0;
@@ -53,10 +58,10 @@ export class ProjectTask {
     this.id = params.id;
     this.title = params.title.trim();
     this.description = params.description ?? '';
-    this.startDate = params.startDate;
-    this.endDate = params.endDate;
+    this.startDate = params.startDate ?? '';
+    this.endDate = params.endDate ?? '';
     this.createdAt = params.createdAt ?? new Date().toISOString();
-    this.type = params.type ?? 'task';
+    this.type = isGroupType ? 'group' : (params.type ?? 'task');
     this.parentId = params.parentId ?? null;
 
     // 2. 상태(status)와 진척도(progress)의 동기화 초기화
@@ -116,6 +121,8 @@ export class ProjectTask {
    * 날짜 범위 변경 비즈니스 메서드
    */
   public updateDates(startDate: string, endDate: string): void {
+    if (this.type === 'group') return;
+
     if (!startDate || !endDate) {
       throw new Error('시작일과 종료일은 필수 입력 사항입니다.');
     }
